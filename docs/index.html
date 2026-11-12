@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AuraChain Quantum — Post-Quantum Layer-1 Blockchain, Free Browser SHA3 Miner &amp; DEX</title>
+<meta name="description" content="Join AuraChain Quantum (aurachain-quantum-1): an open-source Post-Quantum Layer-1 blockchain in Safe Rust (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256). Claim a free 10 AURA Pioneer Vault or mine 55 AURA directly in your browser with zero install.">
+<meta name="keywords" content="AuraChain Quantum, post-quantum cryptocurrency, free browser crypto miner, NIST FIPS 204 ML-DSA-44, Rust Layer 1 blockchain, SHA3-256 Proof of Work, WebCrypto wallet, decentralized exchange, .aura identity">
+<link rel="canonical" href="https://sanzaya-p.github.io/aurachain/">
+<link rel="alternate" type="application/rss+xml" title="AuraChain Quantum Live On-Chain Feed" href="https://aurachain-quantum.vercel.app/feed.xml">
+<link rel="alternate" type="application/rss+xml" title="AuraChain Quantum 6-Hourly Digest RSS" href="https://sanzaya-p.github.io/aurachain/rss.xml">
+<meta property="og:site_name" content="AuraChain Quantum">
+<meta property="og:title" content="AuraChain Quantum — Free Browser SHA3 Miner &amp; Post-Quantum L1 Blockchain">
+<meta property="og:description" content="Mine 55 AURA free in your browser in ~3 seconds, claim a scarce @name.aura Post-Quantum identity (NIST FIPS 204 ML-DSA-44), post on Town Square, and trade on AuraLaunch DEX.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sanzaya-p.github.io/aurachain/">
+<meta property="og:image" content="https://aurachain-quantum.vercel.app/og.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AuraChain Quantum — Mine 55 AURA Free in Your Browser (Post-Quantum L1)">
+<meta name="twitter:description" content="Zero-install NIST FIPS 204 ML-DSA-44 + Ed25519 blockchain in Safe Rust. Claim a 10 AURA Pioneer Gift Vault or mine 55 AURA in seconds.">
+<meta name="twitter:image" content="https://aurachain-quantum.vercel.app/og.svg">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "AuraChain Quantum",
+  "operatingSystem": "Web, Windows, Linux, macOS",
+  "applicationCategory": "FinanceApplication",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "url": "https://aurachain-quantum.vercel.app/",
+  "downloadUrl": "https://github.com/sanzaya-p/aurachain/releases",
+  "description": "Open-source Post-Quantum Layer-1 Blockchain using Hybrid NIST FIPS 204 ML-DSA-44 + Ed25519 signatures and SHA3-256 consensus, with browser CPU mining, .aura handles, Town Square, DEX, NFTs, and DAO."
+}
+</script>
+<style>
+  :root {
+    --bg:#070a12; --panel:#11182b; --panel2:#151f38; --line:#22304f;
+    --txt:#e5ecff; --mute:#94a3b8; --aura:#8b5cf6; --cyan:#22d3ee; --pos:#10b981; --pow:#f59e0b;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; font:15.5px/1.65 Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--txt);
+    background:radial-gradient(1100px 500px at 20% -5%, #8b5cf628, transparent),
+               radial-gradient(900px 420px at 85% 0%, #22d3ee20, transparent), var(--bg);
+  }
+  a { color:var(--cyan); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  header { border-bottom:1px solid var(--line); background:#0a0f1edd; position:sticky; top:0; backdrop-filter:blur(12px); z-index:20; }
+  .nav { max-width:1140px; margin:0 auto; padding:14px 22px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+  .brand { font-weight:800; font-size:18px; color:#fff; display:flex; align-items:center; gap:10px; text-decoration:none; }
+  .logo { width:34px; height:34px; border-radius:10px; background:conic-gradient(from 120deg, var(--aura), var(--cyan), var(--pos), var(--aura)); display:grid; place-items:center; font-size:14px; font-weight:900; color:#fff; }
+  main { max-width:1140px; margin:0 auto; padding:48px 22px 80px; }
+  .hero { text-align:center; max-width:860px; margin:0 auto 42px; }
+  .pill { display:inline-flex; align-items:center; gap:7px; padding:5px 13px; border-radius:999px; font-size:12.5px; font-weight:600; background:#22d3ee18; color:var(--cyan); border:1px solid #22d3ee55; margin-bottom:16px; }
+  h1 { font-size:44px; line-height:1.15; margin:0 0 16px; letter-spacing:-.8px; }
+  @media (max-width:680px) { h1 { font-size:32px; } }
+  .subhero { font-size:18.5px; color:#b8c7e6; margin:0 0 28px; }
+  .cta-row { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .btn {
+    display:inline-flex; align-items:center; gap:8px; padding:13px 22px; border-radius:11px;
+    font-weight:700; font-size:15px; color:#fff; text-decoration:none; transition:.15s;
+    background:linear-gradient(135deg, var(--aura), #0891b2); box-shadow:0 8px 26px #8b5cf644;
+  }
+  .btn:hover { filter:brightness(1.12); transform:translateY(-1px); text-decoration:none; }
+  .btn.green { background:linear-gradient(135deg, #059669, #0d9488); box-shadow:0 8px 24px #10b98133; }
+  .btn.ghost { background:#15203a; border:1px solid var(--line); box-shadow:none; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:13px; margin:0 0 38px; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; text-align:center; }
+  .stat .k { font-size:11px; text-transform:uppercase; letter-spacing:.7px; color:var(--mute); }
+  .stat .v { font-size:25px; font-weight:800; margin-top:4px; }
+  .stat .s { font-size:12px; color:var(--mute); margin-top:2px; }
+  .chest {
+    background:linear-gradient(135deg, #0c2924, #171538); border:1px solid #10b98188;
+    border-radius:18px; padding:26px; margin-bottom:38px;
+  }
+  .vault-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:14px; margin-top:16px; }
+  .vault { background:#0b1222cc; border:1px solid #25385c; border-radius:13px; padding:16px 18px; display:flex; flex-direction:column; justify-content:space-between; gap:12px; }
+  .grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:18px; margin-bottom:38px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:15px; padding:22px; }
+  .card h3 { margin:0 0 8px; font-size:18px; color:#fff; }
+  .card p { margin:0; color:#c5d3ee; font-size:14.5px; }
+  pre { background:#090e1c; border:1px solid var(--line); border-radius:12px; padding:15px 18px; overflow-x:auto; font:13px/1.55 ui-monospace,Consolas,monospace; color:#cbd5f5; }
+  code { font-family:ui-monospace,Consolas,monospace; color:#67e8f9; font-size:.92em; }
+  footer { border-top:1px solid var(--line); padding:30px 22px; text-align:center; color:var(--mute); font-size:13.5px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <a class="brand" href="./index.html"><span class="logo">AQ</span> AuraChain Quantum</a>
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:14px">
+      <a href="./digest.html">📊 Live Digest</a>
+      <a href="./post-quantum-blockchain-rust.html">🔬 Rust PQ Architecture</a>
+      <a href="https://aurachain-quantum.vercel.app/feed.xml">📡 RSS 2.0</a>
+      <a href="https://github.com/sanzaya-p/aurachain">📦 GitHub</a>
+      <a class="btn" style="padding:8px 15px;font-size:13.5px" href="https://aurachain-quantum.vercel.app/?ref=aura1q11ffd330c403eff29abdb3e7c86f5da654a3392a">⚡ Mine +55 AURA Free</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="pill">🛡️ NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256 · 0% Pre-Mine Fair Launch</div>
+    <h1>The Post-Quantum Layer-1 You Can Mine in Your Browser.</h1>
+    <p class="subhero">
+      Generate a non-custodial lattice-shielded wallet in 1 click, mine <strong>55 AURA</strong> via real SHA3-256 Proof-of-Work in seconds, claim your scarce <code>@name.aura</code> identity, post on the on-chain Town Square, and swap tokens on AuraLaunch DEX.
+    </p>
+    <div class="cta-row">
+      <a class="btn green" href="https://aurachain-quantum.vercel.app/?ref=aura1q11ffd330c403eff29abdb3e7c86f5da654a3392a">⛏️ Start Mining +55 AURA Bonus (Zero Install)</a>
+      <a class="btn ghost" href="https://aurachain-quantum.vercel.app/">🔍 Explore Live Chain &amp; Town Square</a>
+      <a class="btn ghost" href="./digest.html">📰 Read 6-Hourly Network Digest</a>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">Live Block Height</div><div class="v" id="st-height">Live</div><div class="s" id="st-fin">Casper ⅔ BFT Finality</div></div>
+    <div class="stat"><div class="k">Human Wallets</div><div class="v" id="st-humans" style="color:var(--cyan)">Live</div><div class="s" id="st-names">@name.aura PQ IDs</div></div>
+    <div class="stat"><div class="k">Circulating Supply</div><div class="v" id="st-circ" style="color:var(--pow)">Live</div><div class="s">Hard Cap: 10,000,000,000</div></div>
+    <div class="stat"><div class="k">Ecosystem Assets</div><div class="v" id="st-eco" style="color:var(--pos)">Live</div><div class="s">DEX Pools · NFTs · DAO AIPs</div></div>
+  </div>
+
+  <!-- Intentional public bearer faucet links (10 AURA each) for first-come human pioneers -->
+  <section class="chest">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <h2 style="margin:0;font-size:22px;color:#a7f3d0">🎁 First-Come Pioneer Treasure Chest (3 × 10 AURA Live On-Chain Vaults)</h2>
+        <p style="margin:5px 0 0;color:#d1fae5;font-size:14.5px">
+          Pre-funded from real SHA3-256 CPU Proof-of-Work by <code>@aurachain.aura</code>. If any vault below still shows <strong>UNCLAIMED</strong>, click to sweep <strong>10 AURA</strong> straight into your browser wallet! Already claimed? Use the <strong>+55 AURA Referral Miner</strong> anytime.
+        </p>
+      </div>
+    </div>
+    <div class="vault-grid">
+      <div class="vault" data-vault="aura1qe1d7959e0190ae9269c4a3b6e6bf171364ef968d">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Pioneer Vault #1</strong>
+            <span class="v-status" style="font-size:12px;color:#6ee7b7">Checking chain…</span>
+          </div>
+          <div style="font-size:12px;color:var(--mute);margin-top:4px"><code>aura1qe1d7959e01…968d</code></div>
+        </div>
+        <a class="btn green v-btn" style="justify-content:center;padding:10px" href="https://aurachain-quantum.vercel.app/#gift=5fbd71aaebcb45fe163fac0ad1124056a0be321f6f588364ed24eb3b84c53c0c">🎁 Sweep 10 AURA Gift #1</a>
+      </div>
+
+      <div class="vault" data-vault="aura1qfc682d4abf723e349341ae929f1d6428ec35bf21">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Pioneer Vault #2</strong>
+            <span class="v-status" style="font-size:12px;color:#6ee7b7">Checking chain…</span>
+          </div>
+          <div style="font-size:12px;color:var(--mute);margin-top:4px"><code>aura1qfc682d4abf…bf21</code></div>
+        </div>
+        <a class="btn green v-btn" style="justify-content:center;padding:10px" href="https://aurachain-quantum.vercel.app/#gift=22db5d7331c7ddac5c52e4a28c3d164c498c7ddc7a2b61204665152aaf950145">🎁 Sweep 10 AURA Gift #2</a>
+      </div>
+
+      <div class="vault" data-vault="aura1qbcf192809cda4abc91f4e511a796a41472cf8d54">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Pioneer Vault #3</strong>
+            <span class="v-status" style="font-size:12px;color:#6ee7b7">Checking chain…</span>
+          </div>
+          <div style="font-size:12px;color:var(--mute);margin-top:4px"><code>aura1qbcf192809c…8d54</code></div>
+        </div>
+        <a class="btn green v-btn" style="justify-content:center;padding:10px" href="https://aurachain-quantum.vercel.app/#gift=79350bdcb2a36e08b0b69974021e89314691f2e00c197df76ea7421c091f0878">🎁 Sweep 10 AURA Gift #3</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid3">
+    <div class="card">
+      <h3>🔐 NIST FIPS 204 Post-Quantum Security</h3>
+      <p>Every transaction and validator block requires conjunctive <strong>ML-DSA-44 lattice</strong> + <strong>Ed25519</strong> signatures and <strong>SHA3-256</strong> commitments—protecting user balances against both classical and quantum adversaries.</p>
+    </div>
+    <div class="card">
+      <h3>🌐 Viral Gift Vaults &amp; @name.aura</h3>
+      <p>Claim scarce <code>@handle.aura</code> identities, post and tip creators on the Quantum Town Square, or package AURA into 1-click bearer URLs you can send over WhatsApp, Telegram, Discord, or X.</p>
+    </div>
+    <div class="card">
+      <h3>📈 Fair-Launch DeFi, NFTs &amp; DAO</h3>
+      <p>Launch rug-proof 0%-premine constant-product tokens on <strong>AuraLaunch DEX</strong> (swap <code>$QBIT</code> &amp; <code>$PHOTON</code> live), trade royalty-enforced AUA NFTs, and vote on protocol AIPs.</p>
+    </div>
+  </div>
+
+  <section class="card" style="margin-bottom:28px">
+    <h3>🖥️ Run a Sovereign Verifying Rust Peer Node ($0.00)</h3>
+    <p style="margin-bottom:12px">Clone the MIT-licensed Rust repository, run the full cryptographic test suite, and sync every block from Genesis #0:</p>
+    <pre>git clone https://github.com/sanzaya-p/aurachain.git
+cd aurachain
+cargo build --release
+./target/release/aurachain node --port 8333 --data ./node-data --peer https://aurachain-quantum.vercel.app</pre>
+  </section>
+</main>
+
+<footer>
+  AuraChain Quantum (<code>aurachain-quantum-1</code>) ·
+  <a href="https://aurachain-quantum.vercel.app/">Live Super-App</a> ·
+  <a href="./digest.html">6-Hourly Digest</a> ·
+  <a href="./post-quantum-blockchain-rust.html">Technical Article</a> ·
+  <a href="https://aurachain-quantum.vercel.app/feed.xml">Live RSS</a> ·
+  <a href="https://aurachain-quantum.vercel.app/llms.txt">llms.txt</a> ·
+  <a href="https://github.com/sanzaya-p/aurachain-ledger">Git-CAS Ledger</a>
+</footer>
+
+<script>
+(async () => {
+  const API = "https://aurachain-quantum.vercel.app";
+  try {
+    const [info, act] = await Promise.all([
+      fetch(API + "/info").then(r => r.json()),
+      fetch(API + "/activity").then(r => r.json())
+    ]);
+    document.getElementById("st-height").textContent = "#" + info.height;
+    document.getElementById("st-fin").textContent = "Casper BFT Finalized #" + info.finalized_height;
+    document.getElementById("st-humans").textContent = act.human_wallets + " Wallets";
+    document.getElementById("st-names").textContent = act.named_identities + " .aura IDs · " + act.messages_count + " posts";
+    document.getElementById("st-circ").textContent = Math.floor(parseFloat(info.circulating)).toLocaleString() + " AURA";
+    document.getElementById("st-eco").textContent = info.tokens_count + " DEX · " + info.nfts_count + " NFTs · " + info.proposals_count + " AIPs";
+  } catch (_) {}
+
+  for (const el of document.querySelectorAll("[data-vault]")) {
+    const addr = el.getAttribute("data-vault");
+    const st = el.querySelector(".v-status");
+    const btn = el.querySelector(".v-btn");
+    try {
+      const acc = await fetch(API + "/account/" + addr).then(r => r.json());
+      if (acc.balance_micro >= 1000000) {
+        st.textContent = "🟢 AVAILABLE (" + parseFloat(acc.balance).toFixed(2) + " AURA)";
+        st.style.color = "#34d399";
+      } else {
+        st.textContent = "✅ Claimed by a Pioneer!";
+        st.style.color = "#94a3b8";
+        btn.textContent = "⚡ Mine +55 AURA via Referral Instead";
+        btn.href = API + "/?ref=aura1q11ffd330c403eff29abdb3e7c86f5da654a3392a";
+        btn.className = "btn ghost v-btn";
+      }
+    } catch (_) {}
+  }
+})();
+</script>
+</body>
+</html>

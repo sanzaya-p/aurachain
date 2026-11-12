@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://sanzaya-p.github.io/aurachain/sitemap.xml

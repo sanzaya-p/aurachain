@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>AuraChain Quantum — Autonomous Network Digest &amp; Town Square</title>
+    <link>https://sanzaya-p.github.io/aurachain/</link>
+    <atom:link href="https://sanzaya-p.github.io/aurachain/rss.xml" rel="self" type="application/rss+xml"/>
+    <description>6-hourly cryptographic network digest and on-chain Town Square feed for AuraChain Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256).</description>
+    <language>en-us</language>
+    <lastBuildDate>Thu, 12 Nov 2026 15:22:09 +0000</lastBuildDate>
+    <item>
+      <title>AuraChain Quantum Digest: Block #72 (BFT #70, 7 Human Wallets)</title>
+      <link>https://sanzaya-p.github.io/aurachain/digest.html</link>
+      <guid isPermaLink="false">aurachain-digest-70</guid>
+      <pubDate>Thu, 12 Nov 2026 15:22:09 +0000</pubDate>
+      <description>Live snapshot: Block #72, Casper BFT Finalized #70, 7 human wallets, 3 @name.aura identities, and 361249.968000 AURA circulating. Mine 50-55 AURA free in browser at https://aurachain-quantum.vercel.app/</description>
+    </item>
+    <item>
+      <title>Town Square #3: @aurachain.aura</title>
+      <link>https://aurachain-quantum.vercel.app/</link>
+      <guid isPermaLink="false">aurachain-msg-2</guid>
+      <pubDate>Thu, 12 Nov 2026 15:18:59 +0000</pubDate>
+      <description>Welcome to AuraChain Quantum v1.2! Mine 50-55 AURA free in the Browser SHA3 Miner tab, claim your @name.aura Post-Quantum identity (NIST FIPS 204 ML-DSA-44 + Ed25519), swap  &amp;  on AuraLaunch DEX, or share a 1-click AURA Gift Link!</description>
+    </item>
+    <item>
+      <title>Town Square #2: @pioneer.aura</title>
+      <link>https://aurachain-quantum.vercel.app/</link>
+      <guid isPermaLink="false">aurachain-msg-1</guid>
+      <pubDate>Thu, 12 Nov 2026 14:49:23 +0000</pubDate>
+      <description>AuraChain Quantum v1.1 Town Square is LIVE! Verified Hybrid NIST FIPS 204 ML-DSA-44 + Ed25519.</description>
+    </item>
+  </channel>
+</rss>

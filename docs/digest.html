@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AuraChain Quantum Live Network Digest — Block #72 (7 Human Wallets)</title>
+<meta name="description" content="Auto-published 6-hourly AuraChain Quantum on-chain report: Block #72, Casper BFT Finalized #70, 7 human wallets, 3 .aura identities, Town Square posts, DEX pools, and holder leaderboard.">
+<link rel="canonical" href="https://sanzaya-p.github.io/aurachain/digest.html">
+<link rel="alternate" type="application/rss+xml" title="AuraChain Quantum RSS Feed" href="https://aurachain-quantum.vercel.app/feed.xml">
+<meta property="og:title" content="AuraChain Quantum Live Digest — Block #72 · 7 Wallets">
+<meta property="og:description" content="Casper BFT Finalized #70 · 361249.968000 AURA circulating · 3 @name.aura identities · Mine 50–55 AURA free in browser.">
+<meta property="og:url" content="https://sanzaya-p.github.io/aurachain/digest.html">
+<meta property="og:image" content="https://aurachain-quantum.vercel.app/og.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://aurachain-quantum.vercel.app/og.svg">
+<style>
+  :root {
+    --bg:#070a12; --panel:#11182b; --line:#22304f; --txt:#e5ecff; --mute:#8b9bb8;
+    --aura:#8b5cf6; --cyan:#22d3ee; --pos:#10b981; --pow:#f59e0b;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.6 Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+  a { color:var(--cyan); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  header { border-bottom:1px solid var(--line); background:#0b1020ee; position:sticky; top:0; backdrop-filter:blur(10px); z-index:10; }
+  .nav { max-width:1120px; margin:0 auto; padding:14px 22px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .brand { font-weight:800; font-size:17px; color:#fff; display:flex; align-items:center; gap:10px; }
+  .logo { width:32px; height:32px; border-radius:9px; background:conic-gradient(from 120deg, var(--aura), var(--cyan), var(--pos), var(--aura)); display:grid; place-items:center; font-size:13px; font-weight:900; }
+  main { max-width:1120px; margin:0 auto; padding:34px 22px 70px; }
+  h1 { font-size:30px; margin:0 0 8px; }
+  h2 { font-size:19px; margin:0 0 14px; color:#fff; }
+  .mute { color:var(--mute); font-size:13px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin:22px 0 28px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:15px 16px; }
+  .card .k { font-size:11px; text-transform:uppercase; color:var(--mute); letter-spacing:.6px; }
+  .card .v { font-size:22px; font-weight:800; margin-top:4px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px; }
+  @media (max-width:880px) { .grid2 { grid-template-columns:1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:18px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #1c2844; }
+  th { color:var(--mute); font-size:11px; text-transform:uppercase; }
+  code { font-family:ui-monospace,Consolas,monospace; background:#17223b; padding:2px 6px; border-radius:5px; color:#67e8f9; font-size:12px; }
+  .post { border:1px solid #1e2c4a; background:#0c1222; border-radius:11px; padding:12px 14px; margin-bottom:10px; }
+  .post-hdr { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:12.5px; color:var(--mute); margin-bottom:5px; }
+  .post-hdr strong { color:var(--cyan); font-size:13.5px; }
+  .post-body { color:#e5ecff; word-break:break-word; }
+  .badge { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+  .badge.pos { background:#10b98122; color:var(--pos); border:1px solid #10b98155; }
+  .btn { display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border-radius:9px; font-weight:700; font-size:13.5px; color:#fff; background:linear-gradient(135deg, var(--aura), #0891b2); text-decoration:none; }
+  footer { border-top:1px solid var(--line); padding:26px 22px; text-align:center; color:var(--mute); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <a class="brand" href="./index.html"><span class="logo">AQ</span> AuraChain Quantum</a>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:14px">
+      <a href="./index.html">Launch Portal</a>
+      <a href="./post-quantum-blockchain-rust.html">Architecture Deep Dive</a>
+      <a href="./rss.xml">RSS Feed</a>
+      <a href="https://github.com/sanzaya-p/aurachain">GitHub</a>
+      <a class="btn" href="https://aurachain-quantum.vercel.app/">⛏️ Mine 50–55 AURA Free</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="mute">Autonomous Cloud Publisher · Snapshot generated 2026-11-12 15:22 UTC from <code>https://aurachain-quantum.vercel.app</code></div>
+  <h1>AuraChain Quantum — Live On-Chain Network Digest</h1>
+  <p class="mute" style="font-size:15px">
+    Cryptographically verified state of <code>aurachain-quantum-1</code> (Hybrid NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256), archived atomically on <a href="https://github.com/sanzaya-p/aurachain-ledger/commits/main">github.com/sanzaya-p/aurachain-ledger</a>.
+  </p>
+
+  <div class="cards">
+    <div class="card"><div class="k">Block Height</div><div class="v">#72</div><div class="mute">Casper BFT Finalized #70</div></div>
+    <div class="card"><div class="k">Human Wallets</div><div class="v" style="color:var(--cyan)">7</div><div class="mute">3 @name.aura identities</div></div>
+    <div class="card"><div class="k">Human Transactions</div><div class="v" style="color:var(--pos)">45</div><div class="mute">2 Town Square posts</div></div>
+    <div class="card"><div class="k">Circulating Supply</div><div class="v" style="color:var(--pow)">361249.968000</div><div class="mute">Burned: 0.032000 AURA</div></div>
+    <div class="card"><div class="k">Total VPoS Stake</div><div class="v">50020.000000</div><div class="mute">25% saturation cap</div></div>
+  </div>
+
+  <div class="grid2">
+    <section>
+      <h2>💬 Latest Quantum Town Square Posts</h2>
+      <div class="post"><div class="post-hdr"><strong>@aurachain.aura</strong><span>Block #69 · 2026-11-12 15:18 UTC</span></div><div class="post-body">Welcome to AuraChain Quantum v1.2! Mine 50-55 AURA free in the Browser SHA3 Miner tab, claim your @name.aura Post-Quantum identity (NIST FIPS 204 ML-DSA-44 + Ed25519), swap  &amp;  on AuraLaunch DEX, or share a 1-click AURA Gift Link!</div></div>
+<div class="post"><div class="post-hdr"><strong>@pioneer.aura</strong><span>Block #32 · 2026-11-12 14:49 UTC</span></div><div class="post-body">AuraChain Quantum v1.1 Town Square is LIVE! Verified Hybrid NIST FIPS 204 ML-DSA-44 + Ed25519.</div></div>
+
+    </section>
+    <section>
+      <h2>🏆 Top Wallet Leaderboard</h2>
+      <table>
+        <thead><tr><th>#</th><th>Identity / Wallet</th><th>Liquid</th><th>Staked</th></tr></thead>
+        <tbody><tr><td>#1</td><td><strong>aura1q1800124bd7f843…</strong><span class='mute'> (Genesis Validator)</span></td><td>309629.992000 AURA</td><td>50000.000000 AURA</td></tr>
+<tr><td>#2</td><td><strong>@sanzaya.aura</strong><span class='mute'></span></td><td>1099.998000 AURA</td><td>0.000000 AURA</td></tr>
+<tr><td>#3</td><td><strong>@aurachain.aura</strong><span class='mute'></span></td><td>49.956000 AURA</td><td>20.000000 AURA</td></tr>
+<tr><td>#4</td><td><strong>@pioneer.aura</strong><span class='mute'></span></td><td>49.992000 AURA</td><td>0.000000 AURA</td></tr>
+<tr><td>#5</td><td><strong>aura1qbcf192809cda4a…</strong><span class='mute'></span></td><td>10.010000 AURA</td><td>0.000000 AURA</td></tr>
+<tr><td>#6</td><td><strong>aura1qe1d7959e0190ae…</strong><span class='mute'></span></td><td>10.010000 AURA</td><td>0.000000 AURA</td></tr>
+<tr><td>#7</td><td><strong>aura1qfc682d4abf723e…</strong><span class='mute'></span></td><td>10.010000 AURA</td><td>0.000000 AURA</td></tr>
+<tr><td>#8</td><td><strong>aura1q3d7af1338e683a…</strong><span class='mute'></span></td><td>0.000000 AURA</td><td>0.000000 AURA</td></tr>
+</tbody>
+      </table>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section>
+      <h2>🚀 AuraLaunch DEX Liquidity Pools</h2>
+      <table>
+        <thead><tr><th>Token</th><th>Spot Price</th><th>AURA Reserve</th><th>Activity</th></tr></thead>
+        <tbody><tr><td><strong>$PHOTON</strong> (Aura Photon Community Coin)</td><td>0.000001 AURA</td><td>120.000000 AURA</td><td>1 holders · 1 swaps</td></tr>
+<tr><td><strong>$QBIT</strong> (Quantum Bit Protocol Token)</td><td>0.000001 AURA</td><td>250.000000 AURA</td><td>1 holders · 1 swaps</td></tr>
+</tbody>
+      </table>
+    </section>
+    <section>
+      <h2>🎨 AUA Royalty NFTs</h2>
+      <table>
+        <thead><tr><th>NFT</th><th>Royalty</th><th>List Price</th><th>Sales</th></tr></thead>
+        <tbody><tr><td>#2 <strong>Metropolis Lattice Keystone #2</strong></td><td>7.5%</td><td>15.000000 AURA</td><td>0 sales</td></tr>
+<tr><td>#1 <strong>Quantum Genesis Artifact #1</strong></td><td>10.0%</td><td>25.000000 AURA</td><td>0 sales</td></tr>
+</tbody>
+      </table>
+    </section>
+  </div>
+
+  <section>
+    <h2>⚡ Recent Human &amp; Ecosystem Transactions</h2>
+    <table>
+      <thead><tr><th>Block</th><th>Kind</th><th>Summary</th><th>Timestamp</th></tr></thead>
+      <tbody><tr><td>#72</td><td><code>transfer</code></td><td>@aurachain.aura sent 10.010000 AURA to aura1qbcf192…</td><td class='mute'>2026-11-12 15:19 UTC</td></tr>
+<tr><td>#71</td><td><code>transfer</code></td><td>@aurachain.aura sent 10.010000 AURA to aura1qfc682d…</td><td class='mute'>2026-11-12 15:19 UTC</td></tr>
+<tr><td>#70</td><td><code>transfer</code></td><td>@aurachain.aura sent 10.010000 AURA to aura1qe1d795…</td><td class='mute'>2026-11-12 15:19 UTC</td></tr>
+<tr><td>#69</td><td><code>postmessage</code></td><td>@aurachain.aura posted on Town Square: &quot;Welcome to AuraChain Quantum v1.2! Mine 50-55 AURA free in the Browser S&quot;</td><td class='mute'>2026-11-12 15:18 UTC</td></tr>
+<tr><td>#68</td><td><code>propose</code></td><td>@aurachain.aura submitted DAO proposal &quot;AIP-2: Open Pioneer Referral &amp; Ecosystem Builder Bounties&quot;</td><td class='mute'>2026-11-12 15:18 UTC</td></tr>
+<tr><td>#67</td><td><code>stake</code></td><td>@aurachain.aura staked 20.000000 AURA in VPoS</td><td class='mute'>2026-11-12 15:18 UTC</td></tr>
+<tr><td>#66</td><td><code>claimname</code></td><td>Claimed quantum identity @aurachain.aura</td><td class='mute'>2026-11-12 15:18 UTC</td></tr>
+<tr><td>#65</td><td><code>powmine</code></td><td>aura1q11ffd3… mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:18 UTC</td></tr>
+<tr><td>#64</td><td><code>powmine</code></td><td>aura1q11ffd3… mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:18 UTC</td></tr>
+<tr><td>#61</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:08 UTC</td></tr>
+<tr><td>#60</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:07 UTC</td></tr>
+<tr><td>#59</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:07 UTC</td></tr>
+<tr><td>#58</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:07 UTC</td></tr>
+<tr><td>#57</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:04 UTC</td></tr>
+<tr><td>#56</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:03 UTC</td></tr>
+<tr><td>#55</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:03 UTC</td></tr>
+<tr><td>#54</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:03 UTC</td></tr>
+<tr><td>#53</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:02 UTC</td></tr>
+<tr><td>#52</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:02 UTC</td></tr>
+<tr><td>#51</td><td><code>powmine</code></td><td>@sanzaya.aura mined +50 AURA via browser/CPU SHA3-256 PoW</td><td class='mute'>2026-11-12 15:02 UTC</td></tr>
+</tbody>
+    </table>
+  </section>
+</main>
+
+<footer>
+  AuraChain Quantum (<code>aurachain-quantum-1</code>) · Auto-published every 6 hours via GitHub Actions ·
+  <a href="https://aurachain-quantum.vercel.app/">Open Super-App</a> ·
+  <a href="https://aurachain-quantum.vercel.app/feed.xml">Live Node RSS</a> ·
+  <a href="./rss.xml">Mirror RSS</a> ·
+  <a href="https://github.com/sanzaya-p/aurachain">Source Code</a>
+</footer>
+</body>
+</html>

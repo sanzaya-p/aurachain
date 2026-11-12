@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-11-12T15:22:09Z",
+  "network": "aurachain-quantum-1",
+  "version": "1.2.0",
+  "height": 72,
+  "finalized_height": 70,
+  "human_wallets": 7,
+  "named_identities": 3,
+  "messages_count": 2,
+  "referrals_count": 0,
+  "human_txs": 45,
+  "circulating_aura": "361249.968000",
+  "total_staked_aura": "50020.000000",
+  "tokens_count": 2,
+  "nfts_count": 2,
+  "proposals_count": 2,
+  "app_url": "https://aurachain-quantum.vercel.app/",
+  "portal_url": "https://sanzaya-p.github.io/aurachain/"
+}

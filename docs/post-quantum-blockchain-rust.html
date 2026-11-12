@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building a Post-Quantum Layer-1 Blockchain in Safe Rust (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256) | AuraChain Quantum</title>
+<meta name="description" content="Technical architecture deep dive: how AuraChain Quantum implements Hybrid NIST FIPS 204 ML-DSA-44 lattice signatures + Ed25519, SHA3-256 Merkle proofs, PoW-to-VPoS consensus, Casper 2/3 BFT finality, and zero-install WebCrypto browser mining in 100% safe Rust.">
+<meta name="keywords" content="post-quantum blockchain, Rust blockchain tutorial, NIST FIPS 204 ML-DSA-44, Dilithium Rust, hybrid Ed25519 ML-DSA, SHA3-256 Merkle tree, Ouroboros Proof of Stake, browser PoW mining, AuraChain Quantum">
+<link rel="canonical" href="https://sanzaya-p.github.io/aurachain/post-quantum-blockchain-rust.html">
+<link rel="alternate" type="application/rss+xml" title="AuraChain Quantum Live On-Chain Feed" href="https://aurachain-quantum.vercel.app/feed.xml">
+<meta property="og:title" content="Building a Post-Quantum Layer-1 Blockchain in Safe Rust (ML-DSA-44 + Ed25519 + SHA3-256)">
+<meta property="og:description" content="How AuraChain Quantum pairs NIST FIPS 204 lattice cryptography with classical Ed25519, fair-launch SHA3-256 PoW, Ouroboros VPoS, and atomic Git-CAS persistence.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sanzaya-p.github.io/aurachain/post-quantum-blockchain-rust.html">
+<meta property="og:image" content="https://aurachain-quantum.vercel.app/og.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://aurachain-quantum.vercel.app/og.svg">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Building a Post-Quantum Layer-1 Blockchain in Safe Rust with NIST FIPS 204 ML-DSA-44, Ed25519 & SHA3-256",
+  "author": { "@type": "Organization", "name": "AuraChain Quantum Protocol" },
+  "publisher": { "@type": "Organization", "name": "AuraChain Quantum", "url": "https://aurachain-quantum.vercel.app/" },
+  "mainEntityOfPage": "https://sanzaya-p.github.io/aurachain/post-quantum-blockchain-rust.html",
+  "about": ["Post-Quantum Cryptography", "NIST FIPS 204 ML-DSA-44", "Rust Programming", "Layer-1 Blockchain Consensus"],
+  "codeRepository": "https://github.com/sanzaya-p/aurachain"
+}
+</script>
+<style>
+  :root {
+    --bg:#070a12; --panel:#11182b; --line:#22304f; --txt:#e5ecff; --mute:#94a3b8;
+    --aura:#8b5cf6; --cyan:#22d3ee; --pos:#10b981; --pow:#f59e0b;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.7 Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+  a { color:var(--cyan); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  header { border-bottom:1px solid var(--line); background:#0b1020ee; position:sticky; top:0; backdrop-filter:blur(10px); z-index:10; }
+  .nav { max-width:960px; margin:0 auto; padding:14px 22px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+  .brand { font-weight:800; font-size:17px; color:#fff; display:flex; align-items:center; gap:10px; }
+  .logo { width:32px; height:32px; border-radius:9px; background:conic-gradient(from 120deg, var(--aura), var(--cyan), var(--pos), var(--aura)); display:grid; place-items:center; font-size:13px; font-weight:900; }
+  main { max-width:860px; margin:0 auto; padding:42px 22px 80px; }
+  h1 { font-size:34px; line-height:1.22; margin:0 0 14px; letter-spacing:-.4px; }
+  h2 { font-size:23px; margin:38px 0 12px; color:#fff; border-bottom:1px solid var(--line); padding-bottom:8px; }
+  h3 { font-size:18px; margin:24px 0 8px; color:#cbd5e1; }
+  p, li { color:#d4def4; }
+  .lead { font-size:19px; color:#b8c7e6; margin-bottom:26px; }
+  .meta { font-size:13px; color:var(--mute); margin-bottom:28px; display:flex; gap:16px; flex-wrap:wrap; }
+  pre { background:#0b1120; border:1px solid var(--line); border-radius:12px; padding:16px 18px; overflow-x:auto; font:13.5px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; color:#cbd5f5; }
+  code { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; background:#141e36; padding:2px 6px; border-radius:5px; font-size:0.9em; color:#67e8f9; }
+  pre code { background:none; padding:0; color:inherit; }
+  .callout { background:linear-gradient(135deg, #131c36, #171233); border:1px solid #8b5cf666; border-radius:14px; padding:20px 22px; margin:28px 0; }
+  .btn { display:inline-flex; align-items:center; gap:7px; padding:10px 18px; border-radius:10px; font-weight:700; font-size:14px; color:#fff; background:linear-gradient(135deg, var(--aura), #0891b2); text-decoration:none; }
+  .btn:hover { filter:brightness(1.1); text-decoration:none; }
+  .btn.sec { background:#182440; border:1px solid var(--line); }
+  table { width:100%; border-collapse:collapse; margin:18px 0; font-size:14.5px; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); }
+  th { color:var(--mute); font-size:12px; text-transform:uppercase; letter-spacing:.5px; }
+  footer { border-top:1px solid var(--line); padding:28px 22px; text-align:center; color:var(--mute); font-size:13.5px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <a class="brand" href="./index.html"><span class="logo">AQ</span> AuraChain Quantum</a>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:14px">
+      <a href="./index.html">Launch Portal</a>
+      <a href="./digest.html">Live Network Digest</a>
+      <a href="https://aurachain-quantum.vercel.app/feed.xml">RSS Feed</a>
+      <a href="https://github.com/sanzaya-p/aurachain">GitHub</a>
+      <a class="btn" href="https://aurachain-quantum.vercel.app/">⛏️ Launch Miner &amp; Wallet</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="meta">
+    <span>Protocol Specification &amp; Engineering Guide</span>
+    <span>·</span>
+    <span>Network: <code>aurachain-quantum-1</code></span>
+    <span>·</span>
+    <span>License: MIT (100% Safe Rust)</span>
+  </div>
+
+  <h1>Building a Post-Quantum Layer-1 Blockchain in Safe Rust with NIST FIPS 204 ML-DSA-44, Ed25519 &amp; SHA3-256</h1>
+  <p class="lead">
+    Every legacy Layer-1 blockchain secured solely by elliptic-curve signatures (ECDSA secp256k1 or Ed25519) faces an existential horizon once cryptographically relevant quantum computers execute Shor’s algorithm on exposed public keys. Here is how <strong>AuraChain Quantum</strong> solves this today—in pure safe Rust and zero-install browser WebCrypto.
+  </p>
+
+  <div class="callout">
+    <strong>Try the Live Network Right Now (Zero Install, $0.00):</strong>
+    <p style="margin:8px 0 14px">Generate a real Hybrid Ed25519 + ML-DSA-44 wallet in your browser, mine 50–55 AURA via SHA3-256 CPU shares, claim your <code>@handle.aura</code> identity, and inspect live Git-CAS blocks.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn" href="https://aurachain-quantum.vercel.app/">🚀 Open Live Super-App</a>
+      <a class="btn sec" href="https://github.com/sanzaya-p/aurachain">📦 Inspect Rust Source</a>
+      <a class="btn sec" href="https://github.com/sanzaya-p/aurachain-ledger/commits/main">📒 Audit Git-CAS Ledger</a>
+    </div>
+  </div>
+
+  <h2>1. Why Hybrid Signatures Beat Single-Primitive Designs</h2>
+  <p>
+    Migrating directly from classical elliptic curves to lattice-based post-quantum schemes introduces a subtle engineering trade-off: lattice cryptography (Module-LWE / Module-SIS) resists Shor’s algorithm, whereas Ed25519 has twenty years of battle-tested classical cryptanalysis and tiny 64-byte signatures.
+  </p>
+  <p>
+    AuraChain Quantum implements a <strong>strictly conjunctive Hybrid Signature Suite</strong> across both the Rust validator node (<code>fips204</code> + <code>ed25519-dalek</code>) and the browser wallet (<code>@noble/post-quantum</code> + <code>@noble/curves</code>):
+  </p>
+  <ul>
+    <li><strong>Deterministic Dual Key Derivation:</strong> From a single 32-byte master entropy seed, domain-separated NIST FIPS 202 <code>SHA3-256</code> KDF branches derive both an Ed25519 keypair and a deterministic NIST FIPS 204 <strong>ML-DSA-44</strong> keypair (`1,312`-byte public key, `2,420`-byte signature).</li>
+    <li><strong>Quantum-Shielded Address Commitment (<code>aura1q…</code>):</strong> Account addresses are <code>aura1q || hex(SHA3-256("AURA-QUANTUM-ADDR-v1" || ed25519_pk || mldsa44_pk))[0..40]</code>. Until an account signs its first outgoing transaction, neither public key is revealed on-chain—adding SHA3-256 preimage shielding on top of lattice hardness.</li>
+    <li><strong>Dual Verification Rule:</strong> Consensus rejects any transaction unless <em>both</em> the Ed25519 signature and the NIST FIPS 204 ML-DSA-44 signature verify against the exact canonical signing preimage and match the sender's <code>aura1q…</code> commitment. Forging a transaction requires breaking Curve25519 <em>and</em> Module-LWE simultaneously.</li>
+  </ul>
+
+  <pre><code>//Deterministic Hybrid Key Derivation (Rust + JS bit-for-bit identical)
+let ed_seed = sha3_256(&amp;[b"AURA-ED25519-KEY-v1", master_seed.as_slice()].concat());
+let pq_seed = sha3_256(&amp;[b"AURA-MLDSA44-KEY-v1", master_seed.as_slice()].concat());
+
+// Address binds both classical and post-quantum public keys behind SHA3-256
+let addr_hash = sha3_256(&amp;[b"AURA-QUANTUM-ADDR-v1", &amp;ed_pk[..], &amp;pq_pk[..]].concat());
+let address = format!("aura1q{}", &amp;hex::encode(addr_hash)[..40]);</code></pre>
+
+  <h2>2. Fair-Launch PoW Bootstrap → Ouroboros VPoS + Casper BFT Finality</h2>
+  <p>
+    Pure Proof-of-Stake chains suffer from an initial distribution dilemma (who gets genesis coins?), while pure Proof-of-Work chains consume continuous energy forever. AuraChain Quantum combines five battle-tested consensus ideas in ~2,500 lines of auditable Rust:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Layer</th><th>Mechanism</th><th>Security Property</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Bootstrap &amp; Access</strong></td><td>SHA3-256 PoW + Ongoing <code>PowMine</code> Shares</td><td>0% pre-mine, 0% VC allocation; anyone with a browser can earn 50–55 AURA</td></tr>
+      <tr><td><strong>Block Production</strong></td><td>Ouroboros-Style Verified PoS (VPoS)</td><td>Deterministic SHA3 stake-weighted slot election with 25% pool saturation cap</td></tr>
+      <tr><td><strong>Finality</strong></td><td>Casper ⅔ Stake BFT Checkpoints</td><td>Irreversible finality every 5 blocks; automated double-sign slashing (10% burn)</td></tr>
+      <tr><td><strong>Monetary Policy</strong></td><td>10B Hard Cap + EIP-1559 Base-Fee Burn</td><td>Predictable halving every 1,000,000 blocks + deflationary fee burn</td></tr>
+      <tr><td><strong>Scale</strong></td><td>L2 Metropolis State-Root Anchoring</td><td>High-throughput rollup batch commitments settled on L1</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Atomic Git-Tree CAS: A Publicly Verifiable Zero-Cost Cloud Ledger</h2>
+  <p>
+    Traditional cloud blockchains hide state inside proprietary SQL or NoSQL databases where operators can silently rewrite rows. AuraChain Quantum’s cloud validator uses <strong>Atomic Git-Tree Compare-And-Swap (CAS)</strong> backed by <a href="https://github.com/sanzaya-p/aurachain-ledger">github.com/sanzaya-p/aurachain-ledger</a>:
+  </p>
+  <ol>
+    <li>Every newly produced block is written as an immutable JSON blob under <code>blocks/&lt;height&gt;.json</code> alongside updated <code>head.json</code> inside a new Git tree pointing to the exact parent commit SHA.</li>
+    <li>The validator updates <code>refs/heads/main</code> with <code>force: false</code>. Git’s fast-forward invariant guarantees strict optimistic concurrency: if a concurrent instance raced ahead, GitHub rejects the ref update and the node cleanly reloads and retries.</li>
+    <li>Every block in history has an immutable Git commit timestamp and SHA—publicly auditable by anyone with <code>git clone</code> at $0.00 infrastructure cost.</li>
+  </ol>
+
+  <h2>4. Run Your Own Sovereign Peer Node in 30 Seconds</h2>
+  <p>
+    AuraChain Quantum has zero lock-in. Any developer can clone the repository, verify every Hybrid ML-DSA-44 + Ed25519 signature from Genesis Block #0, and join the live network:
+  </p>
+  <pre><code>git clone https://github.com/sanzaya-p/aurachain.git
+cd aurachain
+cargo test
+cargo run --release -- node --port 8333 --peers https://aurachain-quantum.vercel.app</code></pre>
+
+  <div class="callout" style="margin-top:36px">
+    <strong>Ready to claim your <code>@name.aura</code> identity or launch a token on AuraLaunch DEX?</strong>
+    <p style="margin:8px 0 14px">Visit the Launch Portal to grab a pre-funded Pioneer Gift Link (if any remain unclaimed) or mine 50 AURA directly in your browser in ~3 seconds.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn" href="./index.html">🎁 Visit Launch Portal &amp; Gift Chest</a>
+      <a class="btn sec" href="https://aurachain-quantum.vercel.app/">⛏️ Mine AURA in Browser</a>
+      <a class="btn sec" href="./digest.html">📊 Read Latest Live Digest</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  AuraChain Quantum (<code>aurachain-quantum-1</code>) · Open-Source MIT ·
+  <a href="https://aurachain-quantum.vercel.app/">Live Super-App</a> ·
+  <a href="https://github.com/sanzaya-p/aurachain">GitHub Source</a> ·
+  <a href="https://github.com/sanzaya-p/aurachain-ledger">Public Ledger</a> ·
+  <a href="https://aurachain-quantum.vercel.app/feed.xml">RSS 2.0</a> ·
+  <a href="https://aurachain-quantum.vercel.app/llms.txt">llms.txt</a>
+</footer>
+</body>
+</html>

@@ -911,6 +911,364 @@ fn ecosystem_json(s: &State, height: u64) -> Value {
     })
 }
 
+// -------------------------------------------------------- Syndication & Discovery
+const APP_URL: &str = "https://aurachain-quantum.vercel.app";
+const PORTAL_URL: &str = "https://sanzaya-p.github.io/aurachain";
+const REPO_URL: &str = "https://github.com/sanzaya-p/aurachain";
+const LEDGER_URL: &str = "https://github.com/sanzaya-p/aurachain-ledger";
+
+fn xml_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 16);
+    for ch in s.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            c if c.is_control() && c != '\n' && c != '\r' && c != '\t' => {}
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn civil_from_days(z_in: i64) -> (i64, u32, u32) {
+    let z = z_in + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+    let year = if m <= 2 { y + 1 } else { y };
+    (year, m, d)
+}
+
+fn iso8601_utc(ts: u64) -> String {
+    let days = (ts / 86400) as i64;
+    let rem = ts % 86400;
+    let (y, m, d) = civil_from_days(days);
+    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", rem / 3600, (rem % 3600) / 60, rem % 60)
+}
+
+fn rfc2822_utc(ts: u64) -> String {
+    const WDAYS: [&str; 7] = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"];
+    const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let days = (ts / 86400) as i64;
+    let rem = ts % 86400;
+    let (y, m, d) = civil_from_days(days);
+    let wday = WDAYS[(days.rem_euclid(7)) as usize];
+    let mon = MONTHS[((m.saturating_sub(1)) as usize).min(11)];
+    format!("{wday}, {d:02} {mon} {y:04} {:02}:{:02}:{:02} +0000", rem / 3600, (rem % 3600) / 60, rem % 60)
+}
+
+fn robots_txt() -> String {
+    format!(
+        "User-agent: *\nAllow: /\n\n\
+         User-agent: Googlebot\nAllow: /\n\n\
+         User-agent: Bingbot\nAllow: /\n\n\
+         User-agent: GPTBot\nAllow: /\n\n\
+         User-agent: OAI-SearchBot\nAllow: /\n\n\
+         User-agent: ChatGPT-User\nAllow: /\n\n\
+         User-agent: PerplexityBot\nAllow: /\n\n\
+         User-agent: ClaudeBot\nAllow: /\n\n\
+         User-agent: Google-Extended\nAllow: /\n\n\
+         Sitemap: {APP_URL}/sitemap.xml\n"
+    )
+}
+
+fn sitemap_xml(now: u64) -> String {
+    let ts = iso8601_utc(now);
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>{APP_URL}/</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>
+  <url><loc>{APP_URL}/llms.txt</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>{APP_URL}/feed.xml</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>{PORTAL_URL}/</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>{PORTAL_URL}/digest.html</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>{PORTAL_URL}/post-quantum-blockchain-rust.html</loc><lastmod>{ts}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+</urlset>
+"#
+    )
+}
+
+fn human_wallet_count(s: &State, key: &Option<Keypair>) -> usize {
+    let genesis_val = key
+        .as_ref()
+        .map(|k| k.address())
+        .or_else(|| s.validator_weights().first().map(|(a, _, _)| a.clone()))
+        .unwrap_or_default();
+    s.accounts.keys().filter(|a| a.as_str() != genesis_val).count()
+}
+
+fn og_svg(head: &Head, key: &Option<Keypair>) -> String {
+    let s = &head.state;
+    let tip_h = head.tip().header.height;
+    let fin_h = s.finalized_height;
+    let humans = human_wallet_count(s, key);
+    let names = s.names.len();
+    let posts = s.next_post_id;
+    let circ_whole = s.minted.saturating_sub(s.burned) / chain::COIN;
+    let tokens = s.tokens.len();
+    let nfts = s.nfts.len();
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#070a12"/>
+      <stop offset="55%" stop-color="#0e1629"/>
+      <stop offset="100%" stop-color="#140d2b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="50%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="36" y="36" width="1128" height="558" rx="28" fill="#0d1426" stroke="#233253" stroke-width="2"/>
+  <rect x="36" y="36" width="1128" height="6" rx="3" fill="url(#accent)"/>
+  <rect x="76" y="78" width="66" height="66" rx="18" fill="url(#accent)"/>
+  <text x="109" y="122" text-anchor="middle" fill="#ffffff" font-family="system-ui,Segoe UI,sans-serif" font-size="30" font-weight="900">AQ</text>
+  <text x="162" y="108" fill="#e5ecff" font-family="system-ui,Segoe UI,sans-serif" font-size="36" font-weight="800">AuraChain Quantum</text>
+  <text x="162" y="138" fill="#22d3ee" font-family="ui-monospace,Consolas,monospace" font-size="18" font-weight="600">NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256 · Fair-Launch L1</text>
+
+  <text x="76" y="212" fill="#ffffff" font-family="system-ui,Segoe UI,sans-serif" font-size="44" font-weight="800">Mine 50–55 AURA Free in Your Browser.</text>
+  <text x="76" y="254" fill="#9fb0d0" font-family="system-ui,Segoe UI,sans-serif" font-size="23">Claim @name.aura Post-Quantum identities, post on Town Square, send 1-click Gift Links &amp; trade on DEX.</text>
+
+  <g transform="translate(76, 294)">
+    <rect width="248" height="128" rx="16" fill="#111b33" stroke="#26385e"/>
+    <text x="22" y="38" fill="#8b9bb8" font-family="system-ui,sans-serif" font-size="15" font-weight="600">LIVE BLOCK HEIGHT</text>
+    <text x="22" y="84" fill="#ffffff" font-family="ui-monospace,Consolas,monospace" font-size="36" font-weight="800">#{tip_h}</text>
+    <text x="22" y="110" fill="#10b981" font-family="system-ui,sans-serif" font-size="15" font-weight="600">Casper BFT Finalized #{fin_h}</text>
+  </g>
+  <g transform="translate(344, 294)">
+    <rect width="248" height="128" rx="16" fill="#111b33" stroke="#26385e"/>
+    <text x="22" y="38" fill="#8b9bb8" font-family="system-ui,sans-serif" font-size="15" font-weight="600">COMMUNITY ADOPTION</text>
+    <text x="22" y="84" fill="#22d3ee" font-family="ui-monospace,Consolas,monospace" font-size="36" font-weight="800">{humans} Wallets</text>
+    <text x="22" y="110" fill="#c4b5fd" font-family="system-ui,sans-serif" font-size="15" font-weight="600">{names} .aura IDs · {posts} Posts</text>
+  </g>
+  <g transform="translate(612, 294)">
+    <rect width="248" height="128" rx="16" fill="#111b33" stroke="#26385e"/>
+    <text x="22" y="38" fill="#8b9bb8" font-family="system-ui,sans-serif" font-size="15" font-weight="600">CIRCULATING AURA</text>
+    <text x="22" y="84" fill="#f59e0b" font-family="ui-monospace,Consolas,monospace" font-size="34" font-weight="800">{circ_whole} AURA</text>
+    <text x="22" y="110" fill="#8b9bb8" font-family="system-ui,sans-serif" font-size="15">0% Pre-Mine · 10B Cap</text>
+  </g>
+  <g transform="translate(880, 294)">
+    <rect width="244" height="128" rx="16" fill="#111b33" stroke="#26385e"/>
+    <text x="22" y="38" fill="#8b9bb8" font-family="system-ui,sans-serif" font-size="15" font-weight="600">DEFI &amp; NFT ECOSYSTEM</text>
+    <text x="22" y="84" fill="#a78bfa" font-family="ui-monospace,Consolas,monospace" font-size="34" font-weight="800">{tokens} DEX · {nfts} NFT</text>
+    <text x="22" y="110" fill="#10b981" font-family="system-ui,sans-serif" font-size="15" font-weight="600">Zero Install · WebCrypto PQ</text>
+  </g>
+
+  <rect x="76" y="466" width="1048" height="84" rx="16" fill="#15223f" stroke="#22d3ee66"/>
+  <text x="104" y="517" fill="#e5ecff" font-family="ui-monospace,Consolas,monospace" font-size="24" font-weight="700">aurachain-quantum.vercel.app</text>
+  <text x="1096" y="517" text-anchor="end" fill="#22d3ee" font-family="system-ui,sans-serif" font-size="21" font-weight="700">Open Quantum Wallet &amp; Mine Free →</text>
+</svg>"##
+    )
+}
+
+fn feed_xml(head: &Head, key: &Option<Keypair>, now: u64) -> String {
+    let s = &head.state;
+    let tip = &head.tip().header;
+    let humans = human_wallet_count(s, key);
+    let build_date = rfc2822_utc(now.max(tip.timestamp));
+    let mut items = String::new();
+
+    // 1. Pinned live checkpoint status item (unique per finalized checkpoint height so readers update cleanly)
+    let fin_h = s.finalized_height;
+    let circ = chain::fmt_aura(s.minted.saturating_sub(s.burned));
+    items.push_str(&format!(
+        "    <item>\n\
+           <title>{}</title>\n\
+           <link>{APP_URL}/</link>\n\
+           <guid isPermaLink=\"false\">aurachain-checkpoint-{fin_h}</guid>\n\
+           <pubDate>{}</pubDate>\n\
+           <description>{}</description>\n\
+         </item>\n",
+        xml_escape(&format!(
+            "Casper BFT Checkpoint #{fin_h} Finalized (Tip #{}, {} Human Wallets)",
+            tip.height, humans
+        )),
+        rfc2822_utc(tip.timestamp),
+        xml_escape(&format!(
+            "AuraChain Quantum reached Block #{} (BFT Finalized #{fin_h}) with {humans} human wallets, {} .aura identities, {} Town Square posts, {} DEX tokens, {} royalty NFTs, and {circ} AURA circulating.",
+            tip.height,
+            s.names.len(),
+            s.next_post_id,
+            s.tokens.len(),
+            s.nfts.len()
+        )),
+    ));
+
+    // 2. On-chain Quantum Town Square posts
+    for m in s.messages.iter().rev().take(15) {
+        let author_label = s
+            .address_names
+            .get(&m.author)
+            .map(|h| format!("@{h}.aura"))
+            .unwrap_or_else(|| m.author.chars().take(16).collect());
+        let title = format!("Town Square #{}: {} posted on-chain", m.id + 1, author_label);
+        let tip_note = if m.tip_aura > 0 {
+            format!(" (Tipped {} AURA)", chain::fmt_aura(m.tip_aura))
+        } else {
+            String::new()
+        };
+        items.push_str(&format!(
+            "    <item>\n\
+               <title>{}</title>\n\
+               <link>{APP_URL}/</link>\n\
+               <guid isPermaLink=\"false\">aurachain-post-{}</guid>\n\
+               <pubDate>{}</pubDate>\n\
+               <description>{}</description>\n\
+             </item>\n",
+            xml_escape(&title),
+            m.id,
+            rfc2822_utc(m.timestamp),
+            xml_escape(&format!("{} — by {} in Block #{}{}", m.message, author_label, m.height, tip_note)),
+        ));
+    }
+
+    // 3. Notable on-chain adoption & DeFi events
+    for ev in s
+        .recent_events
+        .iter()
+        .rev()
+        .filter(|e| {
+            matches!(
+                e.kind.as_str(),
+                "powclaim" | "claimname" | "createtoken" | "mintnft" | "propose" | "swap" | "buynft"
+            )
+        })
+        .take(15)
+    {
+        items.push_str(&format!(
+            "    <item>\n\
+               <title>{}</title>\n\
+               <link>{APP_URL}/</link>\n\
+               <guid isPermaLink=\"false\">aurachain-tx-{}</guid>\n\
+               <pubDate>{}</pubDate>\n\
+               <description>{}</description>\n\
+             </item>\n",
+            xml_escape(&format!("[Block #{}] {}", ev.height, ev.summary)),
+            xml_escape(&ev.tx_id),
+            rfc2822_utc(ev.timestamp),
+            xml_escape(&format!(
+                "On-chain {} transaction {} confirmed in Block #{}: {}",
+                ev.kind, ev.tx_id, ev.height, ev.summary
+            )),
+        ));
+    }
+
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>AuraChain Quantum — Live Post-Quantum L1 &amp; Town Square Feed</title>
+    <link>{APP_URL}/</link>
+    <atom:link href="{APP_URL}/feed.xml" rel="self" type="application/rss+xml"/>
+    <description>Real-time on-chain Town Square posts, Casper BFT checkpoints, browser PoW mining shares, .aura identity claims, DEX token launches, and DAO governance on AuraChain Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256).</description>
+    <language>en-us</language>
+    <lastBuildDate>{build_date}</lastBuildDate>
+    <ttl>15</ttl>
+{items}  </channel>
+</rss>
+"#
+    )
+}
+
+fn llms_txt(head: &Head, key: &Option<Keypair>, store: &Store, now: u64) -> String {
+    let s = &head.state;
+    let tip = &head.tip().header;
+    let humans = human_wallet_count(s, key);
+    let circ = chain::fmt_aura(s.minted.saturating_sub(s.burned));
+    let staked = chain::fmt_aura(s.total_stake());
+    format!(
+        "# AuraChain Quantum (aurachain-quantum-1)\n\n\
+         > Autonomous Post-Quantum Layer-1 Blockchain written in 100% Safe Rust using Hybrid NIST FIPS 204 ML-DSA-44 (lattice) + Ed25519 signatures and NIST FIPS 202 SHA3-256 hashing. Fair-launch (0% pre-mine, 0% VC/team allocation, 10B AURA cap) with in-browser SHA3-256 CPU mining, scarce @name.aura identities, on-chain Town Square social feed, 1-click AURA magic gift links, constant-product DEX, AUA royalty NFTs, DAO governance, and L2 Metropolis rollup anchoring.\n\n\
+         ## Live Network Snapshot ({})\n\
+         - Canonical Super-App & Browser Miner: {APP_URL}/\n\
+         - Launch Portal & 6-Hourly Digest: {PORTAL_URL}/\n\
+         - Block Height: #{} (Casper 2/3 BFT Finalized Checkpoint: #{})\n\
+         - Human Wallets On-Chain: {humans} ({} claimed @name.aura identities, {} Town Square posts)\n\
+         - Circulating Supply: {circ} AURA (Total Staked: {staked} AURA)\n\
+         - Native Ecosystem: {} AuraLaunch DEX Tokens, {} Royalty NFTs, {} DAO Proposals, {} L2 Rollup Batches\n\
+         - Public Cryptographic Ledger Archive: {LEDGER_URL} ({})\n\
+         - Open-Source Rust Repository (MIT): {REPO_URL}\n\n\
+         ## Instant Zero-Install Participation\n\
+         - Browser SHA3-256 Mining: Open {APP_URL}/ -> Browser SHA3 Miner tab -> earn 50 AURA per valid PoW share (55 AURA + 10 AURA inviter bonus via `?ref=aura1q...` referral links).\n\
+         - Sovereign Rust CLI & Full Peer Node: `cargo run --release -- node --port 8333 --peers {APP_URL}`\n\n\
+         ## Public JSON REST & Syndication API\n\
+         - [Network Telemetry]({APP_URL}/info): Height, BFT finality, consensus difficulty, supply, validator weights.\n\
+         - [Adoption & Town Square]({APP_URL}/activity): Human wallet count, top holder leaderboard, live Town Square messages, recent tx breakdown.\n\
+         - [DeFi, NFTs & DAO]({APP_URL}/ecosystem): Active AuraLaunch DEX liquidity pools, royalty NFTs, DAO proposals, L2 commitments.\n\
+         - [Live RSS 2.0 Feed]({APP_URL}/feed.xml): Real-time XML stream of on-chain Town Square posts and ecosystem milestones.\n\
+         - [Agent Capability Manifest]({APP_URL}/.well-known/agent.json): Machine-readable autonomous agent integration descriptor.\n\
+         - [Technical Architecture Guide]({PORTAL_URL}/post-quantum-blockchain-rust.html): Engineering deep dive on Hybrid ML-DSA-44 + Ed25519 + SHA3-256 consensus.\n",
+        iso8601_utc(now),
+        tip.height,
+        s.finalized_height,
+        s.names.len(),
+        s.next_post_id,
+        s.tokens.len(),
+        s.nfts.len(),
+        s.proposals.len(),
+        s.l2_batches.len(),
+        store.backend_label(),
+    )
+}
+
+fn agent_json(head: &Head, key: &Option<Keypair>, store: &Store) -> Value {
+    let s = &head.state;
+    let tip = &head.tip().header;
+    json!({
+        "name": "AuraChain Quantum",
+        "network": chain::NETWORK,
+        "version": env!("CARGO_PKG_VERSION"),
+        "description": "Autonomous Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256) Layer-1 Blockchain with Browser SHA3 Mining, .aura Identities, Town Square, Viral Gift Vaults, Constant-Product DEX, Royalty NFTs, and DAO.",
+        "cryptography": {
+            "signatures": "Hybrid Ed25519 + NIST FIPS 204 ML-DSA-44",
+            "hashing": "NIST FIPS 202 SHA3-256",
+            "address_prefix": "aura1q"
+        },
+        "live_metrics": {
+            "height": tip.height,
+            "finalized_height": s.finalized_height,
+            "human_wallets": human_wallet_count(s, key),
+            "named_identities": s.names.len(),
+            "messages_count": s.next_post_id,
+            "circulating_aura": chain::fmt_aura(s.minted.saturating_sub(s.burned)),
+            "tokens_count": s.tokens.len(),
+            "nfts_count": s.nfts.len(),
+            "storage_backend": store.backend_label()
+        },
+        "urls": {
+            "app": APP_URL,
+            "portal": PORTAL_URL,
+            "source_repo": REPO_URL,
+            "ledger_archive": LEDGER_URL,
+            "llms_txt": format!("{APP_URL}/llms.txt"),
+            "rss_feed": format!("{APP_URL}/feed.xml"),
+            "sitemap": format!("{APP_URL}/sitemap.xml")
+        },
+        "endpoints": {
+            "info": "GET /info",
+            "activity": "GET /activity",
+            "ecosystem": "GET /ecosystem",
+            "tip": "GET /tip",
+            "blocks": "GET /blocks?from=0&limit=50",
+            "account": "GET /account/{aura1q_address}",
+            "merkle_proof": "GET /proof/{height}/{tx_index}",
+            "submit_tx": "POST /tx",
+            "register_peer": "POST /peers"
+        }
+    })
+}
+
 // -------------------------------------------------------------------- HTTP
 fn json_err(c: u16, e: String) -> (u16, String, &'static str) {
     (c, json!({ "error": e }).to_string(), "application/json")
@@ -925,6 +1283,12 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
     };
     if method == "GET" && (path == "/" || path == "/index.html") {
         return (200, EXPLORER_HTML.to_string(), "text/html; charset=utf-8");
+    }
+    if method == "GET" && path == "/robots.txt" {
+        return (200, robots_txt(), "text/plain; charset=utf-8");
+    }
+    if method == "GET" && path == "/sitemap.xml" {
+        return (200, sitemap_xml(chain::now_secs()), "application/xml; charset=utf-8");
     }
     if method == "GET" && (path == "/favicon.ico" || path == "/favicon.png") {
         return (204, String::new(), "image/x-icon");
@@ -1085,6 +1449,17 @@ fn finish_response(
     produced_height: Option<u64>,
     now: u64,
 ) -> (u16, String, &'static str) {
+    if method == "GET" {
+        match path {
+            "/og.svg" => return (200, og_svg(&head, key), "image/svg+xml; charset=utf-8"),
+            "/feed.xml" | "/rss.xml" => return (200, feed_xml(&head, key, now), "application/rss+xml; charset=utf-8"),
+            "/llms.txt" | "/.well-known/llms.txt" => {
+                return (200, llms_txt(&head, key, store, now), "text/plain; charset=utf-8")
+            }
+            "/.well-known/agent.json" => return (200, agent_json(&head, key, store).to_string(), "application/json"),
+            _ => {}
+        }
+    }
     let out: (u16, Value) = match (method, path) {
         ("POST", "/tx") => {
             let mut res = reply.unwrap_or((503, json!({"error": "busy, retry"})));
@@ -1286,6 +1661,15 @@ async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
     if !path.starts_with('/') {
         path = format!("/{path}");
     }
+    let is_syndication = matches!(
+        path.as_str(),
+        "/og.svg" | "/feed.xml" | "/rss.xml" | "/sitemap.xml" | "/robots.txt" | "/llms.txt" | "/.well-known/llms.txt" | "/.well-known/agent.json"
+    );
+    let cache_hdr = if is_syndication {
+        "public, max-age=60, stale-while-revalidate=300"
+    } else {
+        "no-store"
+    };
     let query = rest.join("&");
     let bytes = body.collect().await?.to_bytes().to_vec();
     let (code, out, ctype) = tokio::task::spawn_blocking(move || handle_sync(method, path, query, bytes)).await?;
@@ -1295,7 +1679,7 @@ async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
         .header("access-control-allow-origin", "*")
         .header("access-control-allow-headers", "content-type")
         .header("access-control-allow-methods", "GET, POST, OPTIONS")
-        .header("cache-control", "no-store")
+        .header("cache-control", cache_hdr)
         .body(ResponseBody::from(out))?)
 }
 

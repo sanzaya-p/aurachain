@@ -1,7 +1,9 @@
-# AuraChain Quantum v1.1 (`aurachain-quantum-1`)
+# AuraChain Quantum v1.2 (`aurachain-quantum-1`)
 
 [![Autonomous Pulse & CI](https://github.com/sanzaya-p/aurachain/actions/workflows/autonomous-pulse.yml/badge.svg)](https://github.com/sanzaya-p/aurachain/actions/workflows/autonomous-pulse.yml)
+[![Continuous Publisher](https://github.com/sanzaya-p/aurachain/actions/workflows/continuous-publish.yml/badge.svg)](https://sanzaya-p.github.io/aurachain/)
 [![Live Network](https://img.shields.io/badge/Live_Super--App-aurachain--quantum.vercel.app-7c3aed)](https://aurachain-quantum.vercel.app)
+[![Launch Portal](https://img.shields.io/badge/Launch_Portal_%26_Digest-sanzaya--p.github.io-10b981)](https://sanzaya-p.github.io/aurachain/)
 [![Public Ledger](https://img.shields.io/badge/Public_Git--CAS_Ledger-aurachain--ledger-06b6d4)](https://github.com/sanzaya-p/aurachain-ledger)
 [![Post-Quantum](https://img.shields.io/badge/Cryptography-NIST_FIPS_204_ML--DSA--44_%2B_Ed25519-06b6d4)](./src/crypto.rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg)](./Cargo.toml)
@@ -20,6 +22,10 @@
 
 - **Live Super-App (Explorer · Live Users & Town Square · PQ Wallet · Browser SHA3-256 Miner · Gift Links · DEX · NFTs · DAO):**  
   **https://aurachain-quantum.vercel.app**
+- **Launch Portal, Pioneer Gift Chest & 6-Hourly Network Digest:** https://sanzaya-p.github.io/aurachain/
+- **Post-Quantum Rust Architecture Article:** https://sanzaya-p.github.io/aurachain/post-quantum-blockchain-rust.html
+- **Live RSS 2.0 On-Chain Syndication Feed:** https://aurachain-quantum.vercel.app/feed.xml
+- **AI Search & Agent Manifest (`llms.txt`):** https://aurachain-quantum.vercel.app/llms.txt
 - **Live Adoption & User Activity JSON:** https://aurachain-quantum.vercel.app/activity
 - **Live Consensus Telemetry JSON:** https://aurachain-quantum.vercel.app/info
 - **Live Ecosystem State:** https://aurachain-quantum.vercel.app/ecosystem

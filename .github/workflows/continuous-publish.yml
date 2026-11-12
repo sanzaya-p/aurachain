@@ -1,0 +1,52 @@
+name: Autonomous Continuous Publisher & GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Regenerates live on-chain digest, RSS feed & AI/SEO sitemaps every 6 hours (24/7, $0.00)
+    - cron: "15 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Generate Live Network Digest & Deploy Portal
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate live AuraChain Quantum digest, RSS & sitemaps (+ optional social syndication)
+        env:
+          AURA_NODE_URL: "https://aurachain-quantum.vercel.app"
+          AURA_PORTAL_URL: "https://sanzaya-p.github.io/aurachain"
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
+          BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
+        run: python3 scripts/generate_digest.py
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Launch Portal & Digest artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

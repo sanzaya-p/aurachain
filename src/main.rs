@@ -15,7 +15,7 @@ use std::time::Duration;
 
 const DEFAULT_NODE: &str = "https://aurachain-quantum.vercel.app";
 
-const HELP: &str = r#"AuraChain Quantum v1.1 — Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) Sovereign L1 + Rollup
+const HELP: &str = r#"AuraChain Quantum v1.2 — Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) Sovereign L1 + Rollup
 
 USAGE:
   aurachain keygen       --out <file.json>

@@ -1,0 +1,11 @@
+# AuraChain Quantum Launch Portal
+
+> Post-Quantum Layer-1 Blockchain (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256) in Safe Rust.
+
+- Live Super-App & Free Browser SHA3 Miner: https://aurachain-quantum.vercel.app/
+- Full Live AI Manifest: https://aurachain-quantum.vercel.app/llms.txt
+- Live On-Chain RSS 2.0 Feed: https://aurachain-quantum.vercel.app/feed.xml
+- 6-Hourly Network Digest: https://sanzaya-p.github.io/aurachain/digest.html
+- Rust Post-Quantum Architecture Article: https://sanzaya-p.github.io/aurachain/post-quantum-blockchain-rust.html
+- Source Repository: https://github.com/sanzaya-p/aurachain
+- Public Git-CAS Block Ledger: https://github.com/sanzaya-p/aurachain-ledger
