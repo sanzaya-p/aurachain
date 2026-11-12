@@ -4,6 +4,8 @@ version = "0.3.0"
 edition = "2021"
 description = "AuraChain devnet: fair-launch PoW bootstrap -> Verified Proof-of-Stake (VPoS) settlement layer with EIP-1559-style fee burn and L2 state-root anchoring"
 license = "MIT"
+# Vercel runs the package's default binary as the serverless function.
+default-run = "node"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -13,7 +15,19 @@ hex = "0.4"
 rand = "0.8"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 tiny_http = "0.12"
-ureq = { version = "2", default-features = false, features = ["json"] }
+ureq = { version = "2", default-features = false, features = ["json", "tls"] }
+# Vercel serverless node (api/node.rs)
+vercel_runtime = "2"
+http-body-util = "0.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[[bin]]
+name = "aurachain"
+path = "src/main.rs"
+
+[[bin]]
+name = "node"
+path = "api/node.rs"
 
 [profile.release]
 opt-level = 3
