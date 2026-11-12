@@ -1,18 +1,18 @@
-//! AuraChain Quantum v1.0 — Autonomous Serverless VPoS + L2 Metropolis Node for Vercel.
+//! AuraChain Quantum v1.1 — Autonomous Serverless VPoS + L2 Metropolis Node for Vercel.
 //!
 //! Cryptographic & Systems Design:
 //!   * Consensus & Signatures: Exact consensus state machine of `src/chain.rs` +
 //!     Hybrid Post-Quantum signatures (`Ed25519 + NIST FIPS 204 ML-DSA-44 + SHA3-256`).
-//!   * Zero-Cost Cloud Persistence (`Store`):
-//!       1. Upstash Redis (`KV_REST_API_URL` / `UPSTASH_REDIS_REST_URL`) via atomic Lua CAS, OR
-//!       2. First-Party Vercel Blob (`BLOB_READ_WRITE_TOKEN`) via write-once immutable
-//!          Delta-Lake-style versioned snapshots (`aura-q1/snap/<ver>-<hash>.json`) +
-//!          permanent block objects (`aura-q1/b/<height>.json`), OR
-//!       3. Local filesystem (`AURA_STORE_DIR`) for offline testing.
-//!   * Autonomous Operation: Produces VPoS blocks + BFT finality checkpoints immediately
-//!     when transactions arrive, on a 25s heartbeat, and on scheduled `/pulse` triggers
-//!     (which also settle autonomous L2 "Metropolis" rollup batches onto L1).
+//!   * Zero-Cost High-Quota Cloud Persistence (`Store`):
+//!       1. GitHub Atomic Git-Tree CAS (`AURA_GITHUB_TOKEN` + `AURA_GITHUB_REPO`, 5,000 req/hr = 3.6M/mo free + unlimited CDN reads), OR
+//!       2. Upstash Redis (`KV_REST_API_URL` / `UPSTASH_REDIS_REST_URL`) via atomic Lua CAS, OR
+//!       3. Vercel Blob (`BLOB_READ_WRITE_TOKEN`) versioned snapshots, OR
+//!       4. Local filesystem (`AURA_STORE_DIR`) for offline testing.
+//!   * Autonomous Operation: Seals VPoS blocks + BFT finality checkpoints within 5s whenever
+//!     user transactions arrive, on `/pulse` triggers (which also settle L2 Metropolis rollup
+//!     batches onto L1), and on a 300s low-overhead idle heartbeat.
 #![allow(dead_code)]
+#![recursion_limit = "256"]
 
 mod chain;
 mod crypto;
@@ -22,23 +22,36 @@ use crypto::Keypair;
 use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use vercel_runtime::{run, service_fn, Error, Request, Response, ResponseBody};
 
 const EXPLORER_HTML: &str = include_str!("explorer.html");
 const SEED_CHAIN: &str = include_str!("../seed/chain.json");
-const HEARTBEAT_SECS: u64 = 25;
-const RECENT: usize = 30;
+const IDLE_HEARTBEAT_SECS: u64 = 300;
+const RECENT: usize = 32;
 const BLOB_NS: &str = "aura-q1";
 
 // ------------------------------------------------------------------- head
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct PeerHeartbeat {
+    id: String,
+    label: String,
+    height: u64,
+    last_seen: u64,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 struct Head {
+    #[serde(default)]
+    ver: u64,
     blocks: Vec<Block>, // most recent RECENT blocks; last = tip
     state: State,
     mempool: Vec<Tx>,
     log: Vec<String>,
+    #[serde(default)]
+    peers: BTreeMap<String, PeerHeartbeat>,
 }
 
 impl Head {
@@ -48,8 +61,8 @@ impl Head {
     fn log(&mut self, m: String) {
         self.log.push(format!("[{}] {m}", chain::now_secs()));
         let n = self.log.len();
-        if n > 14 {
-            self.log.drain(..n - 14);
+        if n > 16 {
+            self.log.drain(..n - 16);
         }
     }
     fn prune_mempool(&mut self) {
@@ -65,6 +78,7 @@ impl Head {
 
 // ------------------------------------------------------------------ store
 enum Store {
+    GitHub { repo: String, branch: String, token: String },
     Upstash { url: String, token: String },
     Blob { token: String, public_base: String },
     File { dir: std::path::PathBuf },
@@ -73,6 +87,8 @@ enum Store {
 static FILE_LOCK: Mutex<()> = Mutex::new(());
 static OP_LOCK: Mutex<()> = Mutex::new(());
 static CACHE: Mutex<Option<(Instant, u64, Head)>> = Mutex::new(None);
+static GH_STATE: Mutex<Option<(u64, String, String)>> = Mutex::new(None); // (ver, commit_sha, tree_sha)
+static LIVE_PEERS: Mutex<BTreeMap<String, PeerHeartbeat>> = Mutex::new(BTreeMap::new());
 
 const CAS_SCRIPT: &str = "if (redis.call('GET', KEYS[1]) or '0') ~= ARGV[1] then return 0 end \
 redis.call('SET', KEYS[1], ARGV[2]) redis.call('SET', KEYS[2], ARGV[3]) \
@@ -95,9 +111,30 @@ fn parse_snap_ver(pathname: &str) -> Option<(u64, &str)> {
     Some((v.parse().ok()?, h))
 }
 
+enum GhErr {
+    Conflict,
+    Msg(String),
+}
+
 impl Store {
     fn from_env() -> Result<Store, String> {
         let env = |a: &str, b: &str| std::env::var(a).or_else(|_| std::env::var(b)).ok();
+        if let Ok(tok) = std::env::var("AURA_GITHUB_TOKEN") {
+            let tok = tok.trim().trim_matches('"').to_string();
+            if !tok.is_empty() {
+                let repo = std::env::var("AURA_GITHUB_REPO")
+                    .ok()
+                    .map(|s| s.trim().trim_matches('"').to_string())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "sanzaya-p/aurachain-ledger".into());
+                let branch = std::env::var("AURA_GITHUB_BRANCH")
+                    .ok()
+                    .map(|s| s.trim().trim_matches('"').to_string())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "main".into());
+                return Ok(Store::GitHub { repo, branch, token: tok });
+            }
+        }
         if let (Some(url), Some(token)) =
             (env("KV_REST_API_URL", "UPSTASH_REDIS_REST_URL"), env("KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_TOKEN"))
         {
@@ -107,7 +144,6 @@ impl Store {
         }
         if let Ok(tok) = std::env::var("BLOB_READ_WRITE_TOKEN") {
             let tok = tok.trim().trim_matches('"').to_string();
-            // Format: vercel_blob_rw_<storeId>_<secret>
             let parts: Vec<&str> = tok.split('_').collect();
             if parts.len() >= 5 && parts[0] == "vercel" && parts[1] == "blob" {
                 let store_id = parts[3].to_ascii_lowercase();
@@ -119,14 +155,54 @@ impl Store {
             std::fs::create_dir_all(format!("{d}/b")).map_err(|e| e.to_string())?;
             return Ok(Store::File { dir: d.into() });
         }
-        Err("no storage configured: set BLOB_READ_WRITE_TOKEN or Upstash Redis".into())
+        Err("no storage configured: set AURA_GITHUB_TOKEN or Upstash Redis".into())
     }
 
     fn backend_label(&self) -> &'static str {
         match self {
+            Store::GitHub { .. } => "github-git-cas",
             Store::Upstash { .. } => "upstash-redis",
             Store::Blob { .. } => "vercel-blob-cas",
             Store::File { .. } => "local-file",
+        }
+    }
+
+    fn gh_json(&self, method: &str, path: &str, body: Option<Value>) -> Result<Value, GhErr> {
+        let Store::GitHub { token, .. } = self else { unreachable!() };
+        let req = ureq::request(method, &format!("https://api.github.com{path}"))
+            .set("Authorization", &format!("Bearer {token}"))
+            .set("Accept", "application/vnd.github+json")
+            .set("X-GitHub-Api-Version", "2022-11-28")
+            .set("User-Agent", "aurachain-quantum-node/1.1")
+            .timeout(Duration::from_secs(12));
+        let res = match body {
+            Some(b) => req.send_json(b),
+            None => req.call(),
+        };
+        match res {
+            Ok(resp) => resp.into_json::<Value>().map_err(|e| GhErr::Msg(e.to_string())),
+            Err(ureq::Error::Status(409 | 422, _)) => Err(GhErr::Conflict),
+            Err(ureq::Error::Status(code, r)) => {
+                let txt = r.into_string().unwrap_or_default();
+                Err(GhErr::Msg(format!("HTTP {code}: {}", txt.chars().take(180).collect::<String>())))
+            }
+            Err(e) => Err(GhErr::Msg(e.to_string())),
+        }
+    }
+
+    fn gh_raw(&self, path: &str) -> Result<Option<String>, String> {
+        let Store::GitHub { token, .. } = self else { unreachable!() };
+        let res = ureq::get(&format!("https://api.github.com{path}"))
+            .set("Authorization", &format!("Bearer {token}"))
+            .set("Accept", "application/vnd.github.raw+json")
+            .set("X-GitHub-Api-Version", "2022-11-28")
+            .set("User-Agent", "aurachain-quantum-node/1.1")
+            .timeout(Duration::from_secs(12))
+            .call();
+        match res {
+            Ok(resp) => resp.into_string().map(Some).map_err(|e| format!("github raw read: {e}")),
+            Err(ureq::Error::Status(404, _)) => Ok(None),
+            Err(e) => Err(format!("github raw {path}: {e}")),
         }
     }
 
@@ -189,6 +265,35 @@ impl Store {
     /// Returns `(version, head)` or `None` if the store has not been seeded yet.
     fn load(&self) -> Result<Option<(u64, Head)>, String> {
         match self {
+            Store::GitHub { repo, branch, .. } => {
+                let ref_j = self
+                    .gh_json("GET", &format!("/repos/{repo}/git/ref/heads/{branch}"), None)
+                    .map_err(|e| match e { GhErr::Conflict => "conflict".into(), GhErr::Msg(m) => format!("github get ref: {m}") })?;
+                let commit_sha = ref_j["object"]["sha"]
+                    .as_str()
+                    .ok_or_else(|| "github ref missing commit sha".to_string())?
+                    .to_string();
+                let commit_j = self
+                    .gh_json("GET", &format!("/repos/{repo}/git/commits/{commit_sha}"), None)
+                    .map_err(|e| match e { GhErr::Conflict => "conflict".into(), GhErr::Msg(m) => format!("github get commit: {m}") })?;
+                let tree_sha = commit_j["tree"]["sha"]
+                    .as_str()
+                    .ok_or_else(|| "github commit missing tree sha".to_string())?
+                    .to_string();
+                match self.gh_raw(&format!("/repos/{repo}/contents/head.json?ref={commit_sha}"))? {
+                    None => {
+                        *GH_STATE.lock().unwrap() = Some((0, commit_sha, tree_sha));
+                        Ok(None)
+                    }
+                    Some(raw) => {
+                        let mut head: Head = serde_json::from_str(&raw).map_err(|e| format!("bad head.json: {e}"))?;
+                        let ver = head.ver.max(1);
+                        head.ver = ver;
+                        *GH_STATE.lock().unwrap() = Some((ver, commit_sha, tree_sha));
+                        Ok(Some((ver, head)))
+                    }
+                }
+            }
             Store::Upstash { .. } => {
                 let r = self.redis(vec!["MGET".into(), "auraq1:ver".into(), "auraq1:head".into()])?;
                 match (r[0].as_str(), r[1].as_str()) {
@@ -204,7 +309,6 @@ impl Store {
                 if snaps.is_empty() {
                     return Ok(None);
                 }
-                // Deterministic canonical selection: highest version, then lowest state digest.
                 snaps.sort_by(|a, b| {
                     let pa = parse_snap_ver(&a.pathname).unwrap_or((0, ""));
                     let pb = parse_snap_ver(&b.pathname).unwrap_or((0, ""));
@@ -238,8 +342,111 @@ impl Store {
     }
 
     fn cas(&self, expected_ver: u64, new_ver: u64, head: &Head, blocks: &[&Block]) -> Result<bool, String> {
-        let head_json = serde_json::to_string(head).unwrap();
+        let mut head_to_save = head.clone();
+        head_to_save.ver = new_ver;
+        let head_json = serde_json::to_string(&head_to_save).unwrap();
         match self {
+            Store::GitHub { repo, branch, .. } => {
+                let cached_base = GH_STATE
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .filter(|(v, _, _)| *v == expected_ver)
+                    .map(|(_, c, t)| (c.clone(), t.clone()));
+                let (base_commit, base_tree) = match cached_base {
+                    Some(pair) => pair,
+                    None => {
+                        let loaded = self.load()?;
+                        match (expected_ver, loaded) {
+                            (0, None) => GH_STATE
+                                .lock()
+                                .unwrap()
+                                .as_ref()
+                                .map(|(_, c, t)| (c.clone(), t.clone()))
+                                .ok_or_else(|| "missing base ref".to_string())?,
+                            (ev, Some((v, _))) if ev == v => GH_STATE
+                                .lock()
+                                .unwrap()
+                                .as_ref()
+                                .map(|(_, c, t)| (c.clone(), t.clone()))
+                                .ok_or_else(|| "missing base ref".to_string())?,
+                            _ => return Ok(false),
+                        }
+                    }
+                };
+
+                let mut tree_items = vec![json!({
+                    "path": "head.json",
+                    "mode": "100644",
+                    "type": "blob",
+                    "content": head_json,
+                })];
+                for b in blocks {
+                    tree_items.push(json!({
+                        "path": format!("b/{}.json", b.header.height),
+                        "mode": "100644",
+                        "type": "blob",
+                        "content": serde_json::to_string(b).unwrap(),
+                    }));
+                }
+
+                let tree_resp = self
+                    .gh_json(
+                        "POST",
+                        &format!("/repos/{repo}/git/trees"),
+                        Some(json!({ "base_tree": base_tree, "tree": tree_items })),
+                    )
+                    .map_err(|e| match e { GhErr::Conflict => "tree conflict".into(), GhErr::Msg(m) => format!("github create tree: {m}") })?;
+                let new_tree = tree_resp["sha"]
+                    .as_str()
+                    .ok_or_else(|| "github tree missing sha".to_string())?
+                    .to_string();
+
+                let msg = if expected_ver == 0 {
+                    format!(
+                        "Genesis seed through Block #{} (BFT finalized #{})",
+                        head.tip().header.height,
+                        head.state.finalized_height
+                    )
+                } else if let Some(lb) = blocks.last() {
+                    format!(
+                        "Block #{} ({} txs, BFT finalized #{})",
+                        lb.header.height,
+                        lb.txs.len(),
+                        head.state.finalized_height
+                    )
+                } else {
+                    format!("Mempool update v{} ({} pending txs)", new_ver, head.mempool.len())
+                };
+
+                let commit_resp = self
+                    .gh_json(
+                        "POST",
+                        &format!("/repos/{repo}/git/commits"),
+                        Some(json!({ "message": msg, "tree": new_tree, "parents": [base_commit] })),
+                    )
+                    .map_err(|e| match e { GhErr::Conflict => "commit conflict".into(), GhErr::Msg(m) => format!("github create commit: {m}") })?;
+                let new_commit = commit_resp["sha"]
+                    .as_str()
+                    .ok_or_else(|| "github commit missing sha".to_string())?
+                    .to_string();
+
+                match self.gh_json(
+                    "PATCH",
+                    &format!("/repos/{repo}/git/refs/heads/{branch}"),
+                    Some(json!({ "sha": new_commit, "force": false })),
+                ) {
+                    Ok(_) => {
+                        *GH_STATE.lock().unwrap() = Some((new_ver, new_commit, new_tree));
+                        Ok(true)
+                    }
+                    Err(GhErr::Conflict) => {
+                        *GH_STATE.lock().unwrap() = None;
+                        Ok(false)
+                    }
+                    Err(GhErr::Msg(m)) => Err(format!("github update ref: {m}")),
+                }
+            }
             Store::Upstash { .. } => {
                 let mut args: Vec<String> = vec![
                     "EVAL".into(),
@@ -258,13 +465,11 @@ impl Store {
                 Ok(self.redis(args)?.as_i64() == Some(1))
             }
             Store::Blob { .. } => {
-                // 1. Check optimistic version guard against live metadata index.
                 let snaps = self.blob_list_snaps()?;
                 let cur_max = snaps.iter().filter_map(|s| parse_snap_ver(&s.pathname).map(|x| x.0)).max().unwrap_or(0);
                 if cur_max != expected_ver {
                     return Ok(false);
                 }
-                // 2. Archive immutable block objects first.
                 for b in blocks {
                     self.blob_put(
                         &format!("{BLOB_NS}/b/{}.json", b.header.height),
@@ -272,11 +477,9 @@ impl Store {
                         31_536_000,
                     )?;
                 }
-                // 3. Write immutable versioned snapshot `aura-q1/snap/<12d>-<hash12>.json`.
                 let digest = &crypto::sha3_256_hex(head_json.as_bytes())[..12];
                 let snap_path = format!("{BLOB_NS}/snap/{new_ver:012}-{digest}.json");
                 self.blob_put(&snap_path, &head_json, 3600)?;
-                // 4. Prune superseded snapshots older than `new_ver - 20`.
                 let stale: Vec<String> = snaps
                     .into_iter()
                     .filter(|s| parse_snap_ver(&s.pathname).map(|(v, _)| v + 20 <= new_ver).unwrap_or(false))
@@ -307,6 +510,27 @@ impl Store {
 
     fn get_blocks(&self, from: u64, to: u64) -> Result<Vec<Block>, String> {
         match self {
+            Store::GitHub { repo, branch, .. } => {
+                let mut out = Vec::new();
+                for h in from..=to {
+                    let cdn_url = format!("https://raw.githubusercontent.com/{repo}/{branch}/b/{h}.json");
+                    let mut parsed = None;
+                    if let Ok(resp) = ureq::get(&cdn_url).timeout(Duration::from_secs(6)).call() {
+                        if let Ok(s) = resp.into_string() {
+                            parsed = serde_json::from_str::<Block>(&s).ok();
+                        }
+                    }
+                    if parsed.is_none() {
+                        if let Ok(Some(s)) = self.gh_raw(&format!("/repos/{repo}/contents/b/{h}.json?ref={branch}")) {
+                            parsed = serde_json::from_str::<Block>(&s).ok();
+                        }
+                    }
+                    if let Some(b) = parsed {
+                        out.push(b);
+                    }
+                }
+                Ok(out)
+            }
             Store::Upstash { .. } => {
                 let mut args = vec!["MGET".to_string()];
                 args.extend((from..=to).map(|h| format!("auraq1:b:{h}")));
@@ -345,13 +569,15 @@ fn seed(store: &Store) -> Result<(u64, Head), String> {
     let blocks: Vec<Block> = serde_json::from_str(SEED_CHAIN).map_err(|e| format!("bad seed chain: {e}"))?;
     let st = chain::validate_chain(&blocks).map_err(|e| format!("seed chain invalid: {e}"))?;
     let mut head = Head {
+        ver: 1,
         blocks: blocks[blocks.len().saturating_sub(RECENT)..].to_vec(),
         state: st,
         mempool: vec![],
         log: vec![],
+        peers: BTreeMap::new(),
     };
     head.log(format!(
-        "seeded AuraChain Quantum v1.0 at height #{} (BFT finalized #{})",
+        "seeded AuraChain Quantum v1.1 at height #{} (BFT finalized #{})",
         blocks.len() - 1,
         head.state.finalized_height
     ));
@@ -374,6 +600,18 @@ fn seed(store: &Store) -> Result<(u64, Head), String> {
     Ok((1, head))
 }
 
+fn active_peers_merged(head: &Head, now: u64) -> Vec<PeerHeartbeat> {
+    let mut map = head.peers.clone();
+    if let Ok(mut lp) = LIVE_PEERS.lock() {
+        lp.retain(|_, p| now.saturating_sub(p.last_seen) <= 1800);
+        for (k, v) in lp.iter() {
+            map.insert(k.clone(), v.clone());
+        }
+    }
+    map.retain(|_, p| now.saturating_sub(p.last_seen) <= 1800);
+    map.into_values().collect()
+}
+
 /// Autonomous VPoS block + L2 Metropolis rollup batch producer.
 fn maybe_produce(head: &mut Head, key: &Keypair, now: u64, force_pulse: bool) -> Option<Block> {
     let tip = head.tip().header.clone();
@@ -381,7 +619,7 @@ fn maybe_produce(head: &mut Head, key: &Keypair, now: u64, force_pulse: bool) ->
     if !chain::is_pos(next, &head.state) || now < tip.timestamp + chain::SLOT_SECS {
         return None;
     }
-    if !force_pulse && head.mempool.is_empty() && now.saturating_sub(tip.timestamp) < HEARTBEAT_SECS {
+    if !force_pulse && head.mempool.is_empty() && now.saturating_sub(tip.timestamp) < IDLE_HEARTBEAT_SECS {
         return None;
     }
     let slot = (now - tip.timestamp) / chain::SLOT_SECS - 1;
@@ -420,6 +658,12 @@ fn maybe_produce(head: &mut Head, key: &Keypair, now: u64, force_pulse: bool) ->
         head.blocks.drain(..n - RECENT);
     }
     head.prune_mempool();
+    if let Ok(lp) = LIVE_PEERS.lock() {
+        for (k, v) in lp.iter() {
+            head.peers.insert(k.clone(), v.clone());
+        }
+    }
+    head.peers.retain(|_, p| now.saturating_sub(p.last_seen) <= 1800);
     head.log(format!(
         "produced block #{} VPoS (BFT fin #{}, {} txs)",
         b.header.height,
@@ -450,7 +694,7 @@ fn admit_tx(head: &Head, tx: &Tx) -> Result<(), String> {
     chain::apply_tx(&mut sim, tx, chain::MIN_BASE_FEE, next_h)
 }
 
-fn info(head: &Head, key: &Option<Keypair>, store: &Store) -> Value {
+fn info(head: &Head, key: &Option<Keypair>, store: &Store, now: u64) -> Value {
     let s = &head.state;
     let tip = &head.tip().header;
     let next = tip.height + 1;
@@ -459,6 +703,7 @@ fn info(head: &Head, key: &Option<Keypair>, store: &Store) -> Value {
         .into_iter()
         .map(|(a, st, w)| json!({"address": a, "stake": chain::fmt_aura(st), "weight": chain::fmt_aura(w)}))
         .collect();
+    let peers: Vec<String> = active_peers_merged(head, now).into_iter().map(|p| p.label).collect();
     json!({
         "version": env!("CARGO_PKG_VERSION"),
         "network": chain::NETWORK,
@@ -488,18 +733,111 @@ fn info(head: &Head, key: &Option<Keypair>, store: &Store) -> Value {
         "total_staked": chain::fmt_aura(s.total_stake()),
         "validators": vals,
         "accounts": s.accounts.len(),
+        "names_count": s.names.len(),
+        "messages_count": s.next_post_id,
+        "referrals_count": s.referrals_count,
         "proposals_count": s.proposals.len(),
         "tokens_count": s.tokens.len(),
         "nfts_count": s.nfts.len(),
         "l2_batches_count": s.l2_batches.len(),
         "slashed_count": s.slashed.len(),
         "mempool": head.mempool.len(),
-        "peers": [],
-        "self_url": "autonomous cloud validator (bom1)",
+        "peers": peers,
+        "self_url": "autonomous cloud validator",
         "node_address": key.as_ref().map(|k| k.address()),
         "hashrate": 0,
-        "heartbeat_secs": HEARTBEAT_SECS,
+        "heartbeat_secs": IDLE_HEARTBEAT_SECS,
         "log": head.log.iter().rev().take(10).collect::<Vec<_>>(),
+    })
+}
+
+fn activity_json(head: &Head, key: &Option<Keypair>, now: u64) -> Value {
+    let s = &head.state;
+    let genesis_val = key
+        .as_ref()
+        .map(|k| k.address())
+        .or_else(|| s.validator_weights().first().map(|(a, _, _)| a.clone()))
+        .unwrap_or_default();
+    let human_wallets = s.accounts.keys().filter(|a| a.as_str() != genesis_val).count();
+    let human_txs: u64 = s
+        .tx_counts
+        .iter()
+        .filter(|(k, _)| k.as_str() != "anchor" && k.as_str() != "attest")
+        .map(|(_, &c)| c)
+        .sum();
+    let mut ranked: Vec<(&String, &chain::Account)> = s.accounts.iter().collect();
+    ranked.sort_by(|a, b| (b.1.balance + b.1.stake).cmp(&(a.1.balance + a.1.stake)));
+    let leaderboard: Vec<Value> = ranked
+        .into_iter()
+        .take(25)
+        .enumerate()
+        .map(|(i, (addr, acc))| {
+            json!({
+                "rank": i + 1,
+                "address": addr,
+                "handle": s.address_names.get(addr),
+                "is_genesis_validator": addr == &genesis_val,
+                "balance_aura": chain::fmt_aura(acc.balance),
+                "stake_aura": chain::fmt_aura(acc.stake),
+                "total_aura": chain::fmt_aura(acc.balance + acc.stake),
+                "nonce": acc.nonce,
+            })
+        })
+        .collect();
+    let recent_events: Vec<Value> = s
+        .recent_events
+        .iter()
+        .rev()
+        .take(50)
+        .map(|ev| {
+            json!({
+                "height": ev.height,
+                "timestamp": ev.timestamp,
+                "tx_id": ev.tx_id,
+                "kind": ev.kind,
+                "actor": ev.actor,
+                "actor_handle": s.address_names.get(&ev.actor),
+                "target": ev.target,
+                "target_handle": s.address_names.get(&ev.target),
+                "amount_aura": chain::fmt_aura(ev.amount),
+                "summary": ev.summary,
+            })
+        })
+        .collect();
+    let messages: Vec<Value> = s
+        .messages
+        .iter()
+        .rev()
+        .take(50)
+        .map(|m| {
+            json!({
+                "id": m.id,
+                "height": m.height,
+                "timestamp": m.timestamp,
+                "author": m.author,
+                "handle": s.address_names.get(&m.author),
+                "message": m.message,
+                "tip_aura": if m.tip_aura > 0 { Some(chain::fmt_aura(m.tip_aura)) } else { None },
+                "tip_to": if m.tip_to.is_empty() { None } else { Some(&m.tip_to) },
+            })
+        })
+        .collect();
+    let peers = active_peers_merged(head, now);
+    json!({
+        "total_wallets": s.accounts.len(),
+        "human_wallets": human_wallets,
+        "genesis_validator": genesis_val,
+        "named_identities": s.names.len(),
+        "messages_count": s.next_post_id,
+        "referrals_count": s.referrals_count,
+        "total_txs": s.total_txs,
+        "human_txs": human_txs,
+        "tx_breakdown": s.tx_counts,
+        "active_peers_count": peers.len(),
+        "active_peers": peers,
+        "leaderboard": leaderboard,
+        "recent_events": recent_events,
+        "messages": messages,
     })
 }
 
@@ -591,6 +929,31 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
     if method == "GET" && (path == "/favicon.ico" || path == "/favicon.png") {
         return (204, String::new(), "image/x-icon");
     }
+    if method == "POST" && path == "/peers" {
+        let now = chain::now_secs();
+        let v: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
+        let id = v["node_id"]
+            .as_str()
+            .or_else(|| v["url"].as_str())
+            .unwrap_or("peer")
+            .chars()
+            .take(64)
+            .collect::<String>();
+        let label = v["url"].as_str().unwrap_or(&id).chars().take(80).collect::<String>();
+        let height = v["height"].as_u64().unwrap_or(0);
+        if let Ok(mut lp) = LIVE_PEERS.lock() {
+            lp.retain(|_, p| now.saturating_sub(p.last_seen) <= 1800);
+            if lp.len() < 64 {
+                lp.insert(id.clone(), PeerHeartbeat { id, label, height, last_seen: now });
+            }
+        }
+        let count = LIVE_PEERS.lock().map(|m| m.len()).unwrap_or(0);
+        return (
+            200,
+            json!({ "peers": [], "active_peers_count": count, "note": "peer heartbeat registered" }).to_string(),
+            "application/json",
+        );
+    }
 
     let store = match Store::from_env() {
         Ok(s) => s,
@@ -603,22 +966,25 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
     let can_produce = is_pulse || is_tx || (method == "GET" && path == "/info");
     let cache_ttl = if is_pulse || is_tx {
         Duration::ZERO
-    } else if can_produce {
-        Duration::from_millis(1200)
     } else {
-        Duration::from_millis(3000)
+        Duration::from_millis(4000)
     };
 
-    // Fast lock-free read path when cache is warm and request does not submit a tx or pulse.
+    // Fast lock-free read path when cache is warm and no block production is due.
     if !is_pulse && !is_tx {
         if let Some(c) = CACHE
             .lock()
             .unwrap()
             .as_ref()
-            .filter(|c| c.0.elapsed() < cache_ttl)
+            .filter(|c| {
+                c.0.elapsed() < cache_ttl
+                    && (!can_produce
+                        || (c.2.mempool.is_empty()
+                            && now.saturating_sub(c.2.tip().header.timestamp) < IDLE_HEARTBEAT_SECS))
+            })
             .map(|c| (c.1, c.2.clone()))
         {
-            return finish_response(&method, &path, &q, c.1, &key, &store, None, None);
+            return finish_response(&method, &path, &q, c.1, &key, &store, None, None, now);
         }
     }
 
@@ -628,7 +994,12 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
             .lock()
             .unwrap()
             .as_ref()
-            .filter(|c| c.0.elapsed() < cache_ttl)
+            .filter(|c| {
+                c.0.elapsed() < cache_ttl
+                    && (!can_produce
+                        || (c.2.mempool.is_empty()
+                            && now.saturating_sub(c.2.tip().header.timestamp) < IDLE_HEARTBEAT_SECS))
+            })
             .map(|c| (c.1, c.2.clone()))
     } else {
         None
@@ -681,6 +1052,7 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
             match store.cas(ver, nv, &head, &refs) {
                 Ok(true) => {
                     ver = nv;
+                    head.ver = ver;
                     break;
                 }
                 Ok(false) => match store.load() {
@@ -699,7 +1071,7 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
     *CACHE.lock().unwrap() = Some((Instant::now(), ver, head.clone()));
     drop(_op_guard);
 
-    finish_response(&method, &path, &q, head, &key, &store, reply, produced_height)
+    finish_response(&method, &path, &q, head, &key, &store, reply, produced_height, now)
 }
 
 fn finish_response(
@@ -711,6 +1083,7 @@ fn finish_response(
     store: &Store,
     reply: Option<(u16, Value)>,
     produced_height: Option<u64>,
+    now: u64,
 ) -> (u16, String, &'static str) {
     let out: (u16, Value) = match (method, path) {
         ("POST", "/tx") => {
@@ -745,7 +1118,8 @@ fn finish_response(
                 }),
             )
         }
-        ("GET", "/info") => (200, info(&head, &key, &store)),
+        ("GET", "/info") => (200, info(&head, key, store, now)),
+        ("GET", "/activity") => (200, activity_json(&head, key, now)),
         ("GET", "/ecosystem") => (200, ecosystem_json(&head.state, head.tip().header.height)),
         ("GET", "/mempool") => (200, json!(head.mempool)),
         ("GET", "/anchors") => {
@@ -785,6 +1159,7 @@ fn finish_response(
                 200,
                 json!({
                     "address": a,
+                    "handle": s.address_names.get(a),
                     "balance": chain::fmt_aura(acc.balance),
                     "balance_micro": acc.balance,
                     "stake": chain::fmt_aura(acc.stake),
@@ -869,7 +1244,6 @@ fn finish_response(
                 }
             }
         }
-        ("POST", "/peers") => (200, json!({"peers": [], "note": "autonomous cloud node: peers sync from /tip & /blocks"})),
         ("POST", "/block") => (400, json!({"error": "cloud VPoS validator produces canonical blocks"})),
         _ => (404, json!({"error": "not found"})),
     };

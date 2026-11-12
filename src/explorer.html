@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AuraChain Quantum v1.0 — Post-Quantum L1, Wallet, Miner, DEX & DAO</title>
-<meta name="description" content="AuraChain Quantum v1.0: Autonomous Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256) Fair-Launch PoW to VPoS Layer-1 Blockchain with BFT Finality, Browser PoW Mining, AuraLaunch DEX, Royalty NFTs, DAO & L2 Rollup.">
-<meta property="og:title" content="AuraChain Quantum v1.0 — Live Post-Quantum Blockchain">
-<meta property="og:description" content="NIST FIPS 204 ML-DSA-44 + Ed25519 Hybrid Signatures · 0% Pre-Mine Fair Launch · Browser SHA3-256 Mining · BFT Finality · Live DEX, NFTs & DAO.">
+<title>AuraChain Quantum v1.1 — Post-Quantum L1, Town Square, Wallet, Miner, DEX & DAO</title>
+<meta name="description" content="AuraChain Quantum v1.1: Autonomous Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256) Fair-Launch PoW to VPoS Layer-1 Blockchain with .aura Identities, Quantum Town Square, Browser PoW Mining, Viral Gift Links, AuraLaunch DEX, Royalty NFTs, DAO & L2 Rollup.">
+<meta property="og:title" content="AuraChain Quantum v1.1 — Live Post-Quantum Blockchain & Town Square">
+<meta property="og:description" content="Mine 50–55 AURA free in your browser, claim your @name.aura Post-Quantum identity, send 1-click AURA Gift Links, and trade on AuraLaunch DEX.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <style>
@@ -23,9 +23,9 @@
     color:var(--txt); min-height:100vh;
   }
   header {
-    padding:16px 26px; border-bottom:1px solid var(--line); background:#0a0f1dcc;
+    padding:14px 24px; border-bottom:1px solid var(--line); background:#0a0f1dcc;
     backdrop-filter:blur(12px); position:sticky; top:0; z-index:20;
-    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
   }
   .logo {
     width:38px; height:38px; border-radius:11px;
@@ -38,23 +38,31 @@
     background:#22d3ee1c; color:var(--cyan); border:1px solid #22d3ee55; font-weight:600;
   }
   .sub { color:var(--mute); font-size:12px; }
-  .pill { padding:4px 11px; border-radius:999px; font-weight:650; font-size:11.5px; display:inline-flex; align-items:center; gap:5px; }
+  .pill { padding:4px 10px; border-radius:999px; font-weight:650; font-size:11.5px; display:inline-flex; align-items:center; gap:5px; }
   .pow { background:#f59e0b20; color:var(--pow); border:1px solid #f59e0b55; }
   .pos { background:#10b98120; color:var(--pos); border:1px solid #10b98155; }
   .fin { background:#8b5cf620; color:#c4b5fd; border:1px solid #8b5cf655; }
+  .usr { background:#22d3ee20; color:var(--cyan); border:1px solid #22d3ee55; }
+
+  .gift-banner {
+    display:none; margin:14px auto 0; max-width:1340px; padding:14px 20px; border-radius:13px;
+    background:linear-gradient(135deg, #064e3b, #1e1b4b); border:1px solid #10b981aa;
+    box-shadow:0 0 30px #10b98133; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  }
+  .gift-banner.show { display:flex; }
 
   nav.tabs {
-    display:flex; gap:6px; padding:12px 26px 0; border-bottom:1px solid var(--line);
+    display:flex; gap:5px; padding:12px 24px 0; border-bottom:1px solid var(--line);
     overflow-x:auto; background:#090d19;
   }
   nav.tabs button {
     background:transparent; color:var(--mute); border:none; border-bottom:2px solid transparent;
-    padding:10px 15px; font:600 13px inherit; cursor:pointer; white-space:nowrap; transition:.15s;
+    padding:10px 14px; font:600 13px inherit; cursor:pointer; white-space:nowrap; transition:.15s;
   }
   nav.tabs button:hover { color:var(--txt); }
   nav.tabs button.active { color:#fff; border-bottom-color:var(--cyan); background:#22d3ee0c; border-radius:8px 8px 0 0; }
 
-  main { max-width:1380px; margin:0 auto; padding:22px 26px 60px; }
+  main { max-width:1380px; margin:0 auto; padding:20px 24px 60px; }
   .tabpane { display:none; gap:18px; }
   .tabpane.active { display:grid; }
 
@@ -67,7 +75,7 @@
   .card .v { font-size:19px; font-weight:700; margin-top:4px; word-break:break-word; }
   .card .s { font-size:11px; color:var(--mute); margin-top:3px; }
 
-  .grid2 { display:grid; grid-template-columns:1.6fr 1fr; gap:18px; }
+  .grid2 { display:grid; grid-template-columns:1.55fr 1fr; gap:18px; }
   .grid-eq { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
   @media (max-width:980px){ .grid2, .grid-eq { grid-template-columns:1fr; } }
 
@@ -78,7 +86,7 @@
   h2 { font-size:14.5px; margin:0 0 12px; color:#d2def7; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
   h3 { font-size:13px; margin:12px 0 6px; color:#b9c8e8; }
 
-  table { width:100%; border-collapse:collapse; font-size:12.8px; }
+  table { width:100%; border-collapse:collapse; font-size:12.6px; }
   th, td { text-align:left; padding:7px 8px; border-bottom:1px solid #1b2742; white-space:nowrap; }
   th { color:var(--mute); font-weight:600; font-size:11px; text-transform:uppercase; }
   tr.clickable { cursor:pointer; }
@@ -94,7 +102,7 @@
 
   .btn {
     background:linear-gradient(135deg, var(--aura), #6d28d9); color:#fff; border:none;
-    border-radius:9px; padding:9px 15px; font:600 13px inherit; cursor:pointer; transition:.15s;
+    border-radius:9px; padding:9px 14px; font:600 13px inherit; cursor:pointer; transition:.15s;
     display:inline-flex; align-items:center; justify-content:center; gap:6px; text-decoration:none;
   }
   .btn:hover { filter:brightness(1.12); transform:translateY(-1px); }
@@ -139,6 +147,14 @@
     background:linear-gradient(135deg, #311068, #0b3b59, #093d2e); border:1px solid #ffffff18;
     font-size:13px; text-align:center; padding:8px; color:#e0f2fe;
   }
+  .post-card {
+    background:var(--bg2); border:1px solid var(--line); border-radius:11px; padding:11px 13px;
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .feed-item {
+    padding:9px 11px; border-bottom:1px solid #1b2742; display:flex; justify-content:space-between;
+    align-items:center; gap:10px; flex-wrap:wrap; font-size:12.6px;
+  }
   .wallet-pill {
     background:#141e36; border:1px solid var(--line); border-radius:999px;
     padding:5px 12px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:7px;
@@ -159,6 +175,7 @@
     <div class="sub" id="net">connecting to quantum settlement layer…</div>
   </div>
   <div style="flex:1"></div>
+  <button type="button" id="users-pill" class="pill usr" style="cursor:pointer" data-tab="community">👥 0 Human Wallets</button>
   <span id="fin-pill" class="pill fin">🔒 Finalized #0</span>
   <span id="phase" class="pill pos">VPoS Live</span>
   <button type="button" class="wallet-pill" data-tab="wallet" title="Open Non-Custodial Quantum Wallet">
@@ -167,13 +184,26 @@
   </button>
 </header>
 
+<!-- Incoming Viral Gift Banner -->
+<div id="gift-banner" class="gift-banner">
+  <div>
+    <div style="font-weight:800;font-size:15px;color:#a7f3d0">🎁 Incoming Post-Quantum AURA Gift!</div>
+    <div class="sub" id="gift-desc" style="color:#d1fae5;margin-top:2px">Checking ephemeral gift vault on-chain…</div>
+  </div>
+  <div class="row">
+    <button type="button" id="btn-claim-gift" class="btn green" data-action="claim-gift">✨ Sweep Gift Into My Wallet</button>
+    <button type="button" class="btn ghost" data-action="dismiss-gift">Dismiss</button>
+  </div>
+</div>
+
 <nav class="tabs">
   <button type="button" class="active" data-tab="explorer">⛓️ Explorer & Finality</button>
-  <button type="button" data-tab="wallet">🔐 Quantum Wallet & Staking</button>
+  <button type="button" data-tab="community">👥 Live Users, Town Square & Invite</button>
   <button type="button" data-tab="miner">⛏️ Browser SHA3 Miner</button>
+  <button type="button" data-tab="wallet">🔐 Quantum Wallet & Staking</button>
   <button type="button" data-tab="dex">🚀 Token DEX & Royalty NFTs</button>
   <button type="button" data-tab="dao">🏛️ DAO & L2 Metropolis</button>
-  <button type="button" data-tab="docs">📜 Whitepaper & Share</button>
+  <button type="button" data-tab="docs">📜 Whitepaper & Node</button>
 </nav>
 
 <main>
@@ -181,19 +211,23 @@
   <div id="tab-explorer" class="tabpane active">
     <div class="cards">
       <div class="card"><div class="k">Block Height</div><div class="v" id="height">–</div><div class="s" id="bft-sub">BFT Finalized #–</div></div>
-      <div class="card"><div class="k">Consensus Mode</div><div class="v" id="cons">–</div><div class="s">Ouroboros VPoS + Casper BFT</div></div>
+      <div class="card" style="cursor:pointer" data-tab="community"><div class="k">Human Wallets</div><div class="v" id="exp-humans" style="color:var(--cyan)">–</div><div class="s" id="exp-handles">0 .aura identities · click to view</div></div>
       <div class="card"><div class="k">Circulating AURA</div><div class="v" id="circ">–</div><div class="s">Hard Cap: 10,000,000,000</div></div>
       <div class="card"><div class="k">Burned (EIP-1559)</div><div class="v" id="burned">–</div><div class="s" id="basefee-sub">Base fee: –</div></div>
       <div class="card"><div class="k">Total Staked</div><div class="v" id="staked">–</div><div class="s">25% Pool Saturation Cap</div></div>
       <div class="card"><div class="k">Block / PoW Reward</div><div class="v" id="reward">–</div><div class="s" id="powrew-sub">Browser PoW share: 50 AURA</div></div>
-      <div class="card"><div class="k">On-Chain Ecosystem</div><div class="v" id="eco-counts">–</div><div class="s">Tokens · NFTs · AIPs · L2</div></div>
-      <div class="card"><div class="k">Quantum Suite</div><div class="v" style="font-size:14px;color:var(--cyan)">ML-DSA-44 + Ed25519</div><div class="s">SHA3-256 State & Merkle Trees</div></div>
+      <div class="card"><div class="k">On-Chain Ecosystem</div><div class="v" id="eco-counts">–</div><div class="s">Tokens · NFTs · AIPs · Posts</div></div>
+      <div class="card"><div class="k">Consensus & Suite</div><div class="v" id="cons" style="font-size:15px;color:var(--pos)">–</div><div class="s">ML-DSA-44 + Ed25519 + SHA3</div></div>
     </div>
 
     <section>
       <h2>
         <span>Chain Stream (Fair-Launch PoW Bootstrap → Verified Proof-of-Stake at Block #<span id="posh">20</span>)</span>
-        <button type="button" class="btn ghost" style="padding:5px 11px;font-size:11.5px" data-action="pulse">⚡ Pulse Slot / L2 Anchor</button>
+        <div class="row">
+          <button type="button" class="btn green" style="padding:5px 11px;font-size:11.5px" data-tab="miner">⛏️ Mine Free AURA</button>
+          <button type="button" class="btn cyan" style="padding:5px 11px;font-size:11.5px" data-tab="community">💬 Town Square & Gift Links</button>
+          <button type="button" class="btn ghost" style="padding:5px 11px;font-size:11.5px" data-action="pulse">⚡ Pulse Slot / L2 Anchor</button>
+        </div>
       </h2>
       <div class="bar"><div id="prog" style="width:100%"></div></div>
       <div class="chainviz" id="viz"></div>
@@ -242,7 +276,140 @@
     <div class="sub mono" id="gen"></div>
   </div>
 
-  <!-- ==================== TAB 2: POST-QUANTUM WALLET ==================== -->
+  <!-- ==================== TAB 2: LIVE USERS, TOWN SQUARE & INVITE ==================== -->
+  <div id="tab-community" class="tabpane">
+    <div class="cards">
+      <div class="card"><div class="k">Real Human Wallets</div><div class="v" id="act-humans" style="color:var(--cyan)">0</div><div class="s" id="act-total-w">+ 1 Genesis Cloud Validator</div></div>
+      <div class="card"><div class="k">.aura Identities</div><div class="v" id="act-names">0</div><div class="s">Quantum @handle.aura names</div></div>
+      <div class="card"><div class="k">Human & DeFi Txs</div><div class="v" id="act-htxs">0</div><div class="s" id="act-breakdown">PoW · Transfers · DEX · Social</div></div>
+      <div class="card"><div class="k">Town Square Posts</div><div class="v" id="act-posts">0</div><div class="s">Hybrid ML-DSA-44 signed</div></div>
+      <div class="card"><div class="k">Referral Bonuses</div><div class="v" id="act-refs">0</div><div class="s">+55 AURA miner / +10 inviter</div></div>
+      <div class="card"><div class="k">Active Peer Nodes</div><div class="v" id="act-peers">1 Cloud</div><div class="s" id="act-peers-sub">Public Git-CAS + P2P sync</div></div>
+    </div>
+
+    <div class="grid2">
+      <!-- Left: Quantum Identity + Town Square Wall -->
+      <section>
+        <h2>
+          <span>💬 Quantum Town Square (On-Chain Public Wall)</span>
+          <span class="badge-pq">Signed w/ ML-DSA-44 + Ed25519</span>
+        </h2>
+        <p class="sub" style="margin-top:0">
+          Claim your scarce <b>@name.aura</b> identity and post permanent, cryptographically signed messages on-chain so everyone can see who is building and transacting on AuraChain!
+        </p>
+
+        <div style="background:var(--bg2);padding:12px;border-radius:10px;border:1px solid var(--line);margin-bottom:12px">
+          <div class="row" style="justify-content:space-between">
+            <h3 style="margin:0">1. Claim Your @name.aura Quantum Handle</h3>
+            <span id="my-handle-badge" class="pill usr">Unclaimed</span>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <input id="claim-handle" class="mono" placeholder="e.g. satoshi (becomes @satoshi.aura)" style="flex:1">
+            <button type="button" class="btn cyan" data-action="claim-name">Claim @handle.aura</button>
+          </div>
+          <div id="claim-out"></div>
+        </div>
+
+        <div style="background:var(--bg2);padding:12px;border-radius:10px;border:1px solid var(--line);margin-bottom:14px">
+          <h3 style="margin:0 0 6px">2. Post On-Chain Message (Up to 280 chars)</h3>
+          <textarea id="post-msg" rows="2" maxlength="280" placeholder="Say hello to the AuraChain Quantum network, share what you're building, or announce a token…"></textarea>
+          <div class="row" style="margin-top:8px">
+            <input id="post-tip-to" class="mono" placeholder="Optional tip recipient aura1q…" style="flex:1.4">
+            <input id="post-tip-amt" type="number" min="0" step="1" placeholder="Optional tip (AURA)" style="flex:0.8">
+            <button type="button" class="btn green" data-action="post-message">Sign & Post On-Chain</button>
+          </div>
+          <div id="post-out"></div>
+        </div>
+
+        <h3>Latest On-Chain Town Square Posts</h3>
+        <div id="wall-list" style="display:grid;gap:9px;max-height:420px;overflow:auto"></div>
+      </section>
+
+      <!-- Right: Viral Invite + 1-Click AURA Gift Links -->
+      <div style="display:grid;gap:18px;align-content:start">
+        <section>
+          <h2>
+            <span>🎁 Send AURA via 1-Click Magic Gift Link</span>
+            <span class="pill pos">No Wallet Needed to Receive!</span>
+          </h2>
+          <p class="sub" style="margin-top:0">
+            Lock AURA into an ephemeral Post-Quantum claim link and text it on WhatsApp, Telegram, or X. When your friend clicks the link, they sweep the AURA into their own wallet in 1 click!
+          </p>
+          <label>Gift Amount (AURA — +0.01 AURA sweep gas added automatically)</label>
+          <div class="row">
+            <input id="gift-amt" type="number" min="1" step="1" value="10" style="width:130px">
+            <button type="button" class="btn green" style="flex:1" data-action="create-gift">🎁 Lock AURA & Create Gift Link</button>
+          </div>
+          <div id="gift-out"></div>
+        </section>
+
+        <section>
+          <h2>
+            <span>🚀 Your Viral Referral Mining Link</span>
+            <span class="pill pow">+10 AURA / Friend's Share</span>
+          </h2>
+          <p class="sub" style="margin-top:0">
+            Anyone who opens AuraChain with your referral link earns <b>55 AURA</b> (+5 bonus!) when they mine in their browser, and consensus automatically mints <b>+10 AURA</b> directly to your wallet!
+          </p>
+          <div class="row">
+            <input id="ref-link" class="mono" readonly style="flex:1">
+            <button type="button" class="btn cyan" data-action="copy" data-target="ref-link">Copy Link</button>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <a id="ref-wa" target="_blank" rel="noopener" class="btn green">WhatsApp</a>
+            <a id="ref-tg" target="_blank" rel="noopener" class="btn cyan">Telegram</a>
+            <a id="ref-x" target="_blank" rel="noopener" class="btn">Post on X</a>
+            <a id="ref-rd" target="_blank" rel="noopener" class="btn amber">Reddit</a>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <section>
+        <h2>⚡ Live Human & Ecosystem Transaction Stream</h2>
+        <div id="activity-feed" style="max-height:380px;overflow:auto"></div>
+      </section>
+
+      <section>
+        <h2>🏆 Top Wallets & Stakers Leaderboard</h2>
+        <table>
+          <thead><tr><th>#</th><th>Identity / Wallet</th><th>Role</th><th>Liquid AURA</th><th>Staked</th><th>Txs</th></tr></thead>
+          <tbody id="leaderboard-rows"></tbody>
+        </table>
+      </section>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 3: BROWSER POW MINER ==================== -->
+  <div id="tab-miner" class="tabpane">
+    <section>
+      <h2>
+        <span>Permissionless SHA3-256 Fair-Distribution Miner</span>
+        <span class="pill pow">Zero Gas Fee · Anti-Sybil CPU Proof-of-Work</span>
+      </h2>
+      <p class="sub" style="margin-top:0">
+        AuraChain has <b>zero pre-mine</b> and no centralized faucet keys. Anyone on Earth can earn real on-chain
+        <b>50.000000 AURA</b> (or <b>55.000000 AURA</b> via an invite link!) per valid SHA3-256 Proof-of-Work share anchored to the live chain tip, signed client-side with your Post-Quantum wallet.
+      </p>
+      <div id="ref-active-note" class="toast ok" style="display:none;margin-bottom:12px"></div>
+      <div class="cards" style="margin:14px 0">
+        <div class="card"><div class="k">Miner Recipient</div><div class="v mono" style="font-size:12.5px" id="m-addr">–</div></div>
+        <div class="card"><div class="k">Browser Hashrate</div><div class="v" id="m-rate">0 H/s</div><div class="s">Pure SHA3-256 (Keccak)</div></div>
+        <div class="card"><div class="k">Share Reward</div><div class="v" id="m-rew">50.000000 AURA</div><div class="s" id="m-rew-sub">From 10B hard-capped supply</div></div>
+        <div class="card"><div class="k">Shares Mined (Session)</div><div class="v" id="m-won">0</div><div class="s" id="m-hashes">0 hashes computed</div></div>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-mine-once" class="btn amber" data-action="mine-once">⚡ Mine 1 Share (+50 AURA)</button>
+        <button type="button" id="btn-mine-loop" class="btn green" data-action="mine-loop">🔄 Auto-Mine Continuous</button>
+        <button type="button" id="btn-mine-stop" class="btn ghost" data-action="mine-stop" disabled>Stop</button>
+      </div>
+      <div id="mine-out"></div>
+      <div class="log" id="mine-log" style="margin-top:12px">Ready. Click "⚡ Mine 1 Share" to compute a real SHA3-256 PoW proof in your browser.</div>
+    </section>
+  </div>
+
+  <!-- ==================== TAB 4: POST-QUANTUM WALLET ==================== -->
   <div id="tab-wallet" class="tabpane">
     <div class="grid-eq">
       <section>
@@ -261,7 +428,7 @@
         </div>
 
         <div class="cards" style="margin-top:12px">
-          <div class="card"><div class="k">Liquid Balance</div><div class="v" id="w-bal">0</div><div class="s">AURA</div></div>
+          <div class="card"><div class="k">Liquid Balance</div><div class="v" id="w-bal">0</div><div class="s" id="w-handle-sub">AURA</div></div>
           <div class="card"><div class="k">Active Stake</div><div class="v" id="w-stake">0</div><div class="s" id="w-del">Self-delegated</div></div>
           <div class="card"><div class="k">Nonce</div><div class="v" id="w-nonce">0</div><div class="s" id="w-unbond">Unbonding: 0</div></div>
         </div>
@@ -321,35 +488,7 @@
     </div>
   </div>
 
-  <!-- ==================== TAB 3: BROWSER POW MINER ==================== -->
-  <div id="tab-miner" class="tabpane">
-    <section>
-      <h2>
-        <span>Permissionless SHA3-256 Fair-Distribution Miner</span>
-        <span class="pill pow">Zero Gas Fee · Anti-Sybil CPU Proof-of-Work</span>
-      </h2>
-      <p class="sub" style="margin-top:0">
-        AuraChain has <b>zero pre-mine</b> and no centralized faucet keys. Anyone on Earth can earn real on-chain
-        <b>50.000000 AURA</b> per valid SHA3-256 Proof-of-Work share anchored to the live chain tip, signed client-side
-        with your Post-Quantum wallet. Difficulty retargets automatically if &gt;4 claims land in one block.
-      </p>
-      <div class="cards" style="margin:14px 0">
-        <div class="card"><div class="k">Miner Recipient</div><div class="v mono" style="font-size:12.5px" id="m-addr">–</div></div>
-        <div class="card"><div class="k">Browser Hashrate</div><div class="v" id="m-rate">0 H/s</div><div class="s">Pure SHA3-256 (Keccak)</div></div>
-        <div class="card"><div class="k">Share Reward</div><div class="v" id="m-rew">50.000000 AURA</div><div class="s">From 10B hard-capped supply</div></div>
-        <div class="card"><div class="k">Shares Mined (Session)</div><div class="v" id="m-won">0</div><div class="s" id="m-hashes">0 hashes computed</div></div>
-      </div>
-      <div class="row">
-        <button type="button" id="btn-mine-once" class="btn amber" data-action="mine-once">⚡ Mine 1 Share (+50 AURA)</button>
-        <button type="button" id="btn-mine-loop" class="btn green" data-action="mine-loop">🔄 Auto-Mine Continuous</button>
-        <button type="button" id="btn-mine-stop" class="btn ghost" data-action="mine-stop" disabled>Stop</button>
-      </div>
-      <div id="mine-out"></div>
-      <div class="log" id="mine-log" style="margin-top:12px">Ready. Click "⚡ Mine 1 Share (+50 AURA)" to compute a real SHA3-256 PoW proof in your browser.</div>
-    </section>
-  </div>
-
-  <!-- ==================== TAB 4: AURALAUNCH DEX & ROYALTY NFTS ==================== -->
+  <!-- ==================== TAB 5: AURALAUNCH DEX & ROYALTY NFTS ==================== -->
   <div id="tab-dex" class="tabpane">
     <div class="grid2">
       <section>
@@ -424,7 +563,7 @@
     </div>
   </div>
 
-  <!-- ==================== TAB 5: DAO GOVERNANCE & L2 METROPOLIS ==================== -->
+  <!-- ==================== TAB 6: DAO GOVERNANCE & L2 METROPOLIS ==================== -->
   <div id="tab-dao" class="tabpane">
     <div class="grid2">
       <section>
@@ -468,23 +607,22 @@
     </div>
   </div>
 
-  <!-- ==================== TAB 6: WHITEPAPER, NODE & SHARE ==================== -->
+  <!-- ==================== TAB 7: WHITEPAPER, NODE & AUDIT ==================== -->
   <div id="tab-docs" class="tabpane">
     <div class="grid2">
       <section>
-        <h2>AuraChain Quantum v1.0 — Technical Specification</h2>
+        <h2>AuraChain Quantum v1.1 — Technical Specification</h2>
         <p class="sub">Synthesizing Bitcoin's fair-launch scarcity, Cardano's Ouroboros PoS rigor, Ethereum's EIP-1559 & rollup modularity, Solana-inspired L2 batching, and NIST Post-Quantum Lattice Cryptography.</p>
         <table>
           <tbody>
             <tr><th>Network ID</th><td class="mono">aurachain-quantum-1</td></tr>
             <tr><th>Signature Standard</th><td><b>Hybrid NIST FIPS 204 ML-DSA-44</b> (lattice) + <b>Ed25519</b> (elliptic curve)</td></tr>
             <tr><th>Hash & Merkle Function</th><td><b>NIST FIPS 202 SHA3-256</b> (128-bit quantum Grover resistance)</td></tr>
-            <tr><th>Address Format</th><td class="mono">aura1q + 40-hex SHA3-256 pubkey commitment (quantum-shielded until spend)</td></tr>
+            <tr><th>Address & Identity</th><td><span class="mono">aura1q…</span> quantum-shielded commitment + scarce <span class="mono">@name.aura</span> handles</td></tr>
             <tr><th>Launch & Supply</th><td>0% Pre-Mine, 0% VC/Team · Hard Cap <b>10,000,000,000 AURA</b> · Halving every 1M blocks</td></tr>
             <tr><th>Consensus & Finality</th><td>PoW Bootstrap → Ouroboros VPoS (¼ saturation cap) + Casper ⅔ BFT Checkpoint Finality</td></tr>
-            <tr><th>Slashing & Lockup</th><td>Cryptographic double-sign slashing (50% burn + 10% bounty) · 10-block unbonding queue</td></tr>
-            <tr><th>Fee Economics</th><td>EIP-1559 dynamic base fee (100% permanently burned) + producer priority tips</td></tr>
-            <tr><th>Native Ecosystem</th><td>Permissionless powmine distribution · DAO AIPs · AuraLaunch x·y=k DEX · AUA Royalty NFTs · L2 Anchors</td></tr>
+            <tr><th>Public Ledger Archive</th><td>Atomic Git-Tree CAS on <a href="https://github.com/sanzaya-p/aurachain-ledger" target="_blank" rel="noopener" style="color:var(--cyan)">github.com/sanzaya-p/aurachain-ledger</a></td></tr>
+            <tr><th>Native Ecosystem</th><td>PoW + Referral Mining · Town Square · 1-Click Gift Links · DAO AIPs · AuraLaunch DEX · Royalty NFTs · L2</td></tr>
           </tbody>
         </table>
 
@@ -494,33 +632,27 @@
 
       <div style="display:grid;gap:18px;align-content:start">
         <section>
-          <h2>Circulate & Share AuraChain Live</h2>
-          <p class="sub" style="margin-top:0">Invite anyone globally to generate a Post-Quantum wallet, mine 50 AURA in their browser, stake, trade, and run peer nodes:</p>
+          <h2>Open Source, Public Ledger Audit & Binary Releases</h2>
+          <p class="sub" style="margin-top:0">Every single block and state root is publicly auditable on GitHub and verifiable with the standalone Rust binary:</p>
           <div class="row" style="margin-top:10px">
-            <a id="sh-x" target="_blank" rel="noopener" class="btn">Share on X / Twitter</a>
-            <a id="sh-rd" target="_blank" rel="noopener" class="btn amber">Post to Reddit</a>
-            <a id="sh-hn" target="_blank" rel="noopener" class="btn ghost">Submit to Hacker News</a>
-            <a id="sh-tg" target="_blank" rel="noopener" class="btn cyan">Share on Telegram</a>
-            <button type="button" class="btn green" data-action="copy-invite">Copy Launch Invite</button>
-          </div>
-          <div id="sh-msg"></div>
-          <h3>Open Source & Binary Releases</h3>
-          <div class="row">
-            <a href="https://github.com/sanzaya-p/aurachain" target="_blank" rel="noopener" class="btn ghost">📦 GitHub Repository</a>
-            <a href="https://github.com/sanzaya-p/aurachain/releases" target="_blank" rel="noopener" class="btn ghost">⬇️ Windows & Linux CLI Binaries</a>
+            <a href="https://github.com/sanzaya-p/aurachain" target="_blank" rel="noopener" class="btn">📦 Source Code Repo</a>
+            <a href="https://github.com/sanzaya-p/aurachain-ledger/commits/main" target="_blank" rel="noopener" class="btn cyan">📒 Live Block Commit Audit</a>
+            <a href="https://github.com/sanzaya-p/aurachain/releases" target="_blank" rel="noopener" class="btn ghost">⬇️ Windows & Linux CLI</a>
           </div>
         </section>
 
         <section>
           <h2>Public JSON-RPC / REST Endpoints</h2>
-          <pre class="code">GET  /info                 # Full chain & quantum consensus telemetry
-GET  /tip                  # Lightweight sync header (~120 bytes)
+          <pre class="code">GET  /info                 # Full chain &amp; quantum consensus telemetry
+GET  /activity             # Human wallets, leaderboard, Town Square &amp; tx stream
 GET  /ecosystem            # Live DAO proposals, DEX pools, NFTs, L2 batches
+GET  /tip                  # Lightweight sync header (~120 bytes)
 GET  /blocks?from=0&amp;limit=50
 GET  /block/&lt;height&gt;
 GET  /proof/&lt;height&gt;/&lt;idx&gt; # SHA3-256 Merkle inclusion branch
-GET  /account/&lt;aura1q…&gt;    # Balance, stake, tokens, NFTs, nonce
+GET  /account/&lt;aura1q…&gt;    # Balance, @handle.aura, stake, tokens, NFTs, nonce
 POST /tx                   # Submit Hybrid PQ-signed transaction
+POST /peers                # Announce P2P full node heartbeat
 GET  /pulse                # Trigger autonomous VPoS slot &amp; L2 batch</pre>
         </section>
       </div>
@@ -556,8 +688,8 @@ const short = (s, n = 13) => s ? `${s.slice(0, n)}…${s.slice(-4)}` : "–";
 const fmt = s => Number(s || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
 let wallet = null;
-let chainInfo = null;
-let myAccount = null;
+let pendingGift = null; // { wallet, balanceMicro }
+let savedReferrer = null;
 let lastRenderedHeight = -1;
 let mining = false;
 let autoMine = false;
@@ -594,7 +726,20 @@ function initWallet() {
     localStorage.setItem("aurachain_quantum_seed_v1", toHex(seed));
   }
   wallet = deriveWallet(seed);
+
+  // Capture ?ref=aura1q... referral link if valid and not self
+  const params = new URLSearchParams(location.search);
+  const refParam = (params.get("ref") || "").trim();
+  if (/^aura1q[0-9a-f]{40}$/.test(refParam) && refParam !== wallet.address) {
+    localStorage.setItem("aurachain_referrer_v1", refParam);
+  }
+  const storedRef = localStorage.getItem("aurachain_referrer_v1");
+  if (storedRef && /^aura1q[0-9a-f]{40}$/.test(storedRef) && storedRef !== wallet.address) {
+    savedReferrer = storedRef;
+  }
+
   renderWalletStatic();
+  setupShare();
 }
 
 function renderWalletStatic() {
@@ -604,17 +749,23 @@ function renderWalletStatic() {
   $("w-edpk").value = wallet.edPkHex;
   $("w-pqpk").value = wallet.pqPkHex.slice(0, 96) + "… (1,312 bytes NIST FIPS 204 ML-DSA-44)";
   $("m-addr").textContent = wallet.address;
+  if (savedReferrer) {
+    $("ref-active-note").style.display = "block";
+    $("ref-active-note").innerHTML = `🎁 Invite Bonus Active (invited by <span class="mono">${short(savedReferrer, 12)}</span>): You earn <b>55.000000 AURA</b> per PoW share (+5 bonus) and your inviter earns <b>+10 AURA</b>!`;
+    $("m-rew").textContent = "55.000000 AURA";
+    $("btn-mine-once").textContent = "⚡ Mine 1 Share (+55 AURA)";
+  }
 }
 
-function signAndBuildTx(kind, to, amountMicro, feeMicro, nonce, data) {
+function signTxWith(signer, kind, to, amountMicro, feeMicro, nonce, data) {
   const dataHash = toHex(sha3_256(enc(data)));
-  const preimage = enc(`aurachain-tx-v1|${NETWORK}|${kind}|${wallet.pubHex}|${to}|${amountMicro}|${feeMicro}|${nonce}|${dataHash}`);
-  const edSig = ed25519.sign(preimage, wallet.edSeed);
-  const pqSig = ml_dsa44.sign(preimage, wallet.pqSk);
+  const preimage = enc(`aurachain-tx-v1|${NETWORK}|${kind}|${signer.pubHex}|${to}|${amountMicro}|${feeMicro}|${nonce}|${dataHash}`);
+  const edSig = ed25519.sign(preimage, signer.edSeed);
+  const pqSig = ml_dsa44.sign(preimage, signer.pqSk);
   const sigHex = toHex(concatBytes(edSig, pqSig));
   return {
     kind,
-    from_pubkey: wallet.pubHex,
+    from_pubkey: signer.pubHex,
     to,
     amount: amountMicro,
     fee: feeMicro,
@@ -633,14 +784,15 @@ async function apiGet(p) {
   return j;
 }
 
-async function submitSignedTx(kind, to, amountMicro, data, outElId, zeroFee = false) {
+async function submitSignedTx(kind, to, amountMicro, data, outElId, zeroFee = false, customSigner = null) {
+  const signer = customSigner || wallet;
   const box = outElId ? $(outElId) : null;
   try {
     if (box) box.innerHTML = `<div class="toast">Signing with Ed25519 + NIST FIPS 204 ML-DSA-44…</div>`;
-    const [acct, inf] = await Promise.all([apiGet(`/account/${wallet.address}`), apiGet("/info")]);
+    const [acct, inf] = await Promise.all([apiGet(`/account/${signer.address}`), apiGet("/info")]);
     const nonce = acct.next_nonce ?? 0;
     const fee = zeroFee ? 0 : (inf.base_fee_micro || 1000) * 2;
-    const tx = signAndBuildTx(kind, to, amountMicro, fee, nonce, data);
+    const tx = signTxWith(signer, kind, to, amountMicro, fee, nonce, data);
     const resp = await fetch("/tx", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -649,8 +801,7 @@ async function submitSignedTx(kind, to, amountMicro, data, outElId, zeroFee = fa
     const j = await resp.json();
     if (!resp.ok || j.error) throw new Error(j.error || `HTTP ${resp.status}`);
     if (!j.included_in_block) {
-      setTimeout(() => fetch("/pulse").then(() => refreshAll()).catch(() => {}), 1500);
-      setTimeout(() => fetch("/pulse").then(() => refreshAll()).catch(() => {}), 5300);
+      setTimeout(() => fetch("/pulse").then(() => refreshAll()).catch(() => {}), 5200);
     }
     await refreshAll();
     const blkMsg = j.included_in_block ? ` · confirmed in Block #${j.included_in_block}!` : " · sealing in next 5s VPoS slot!";
@@ -666,16 +817,90 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
+// ---------------- Viral 1-Click AURA Gift Links (#gift=<64-hex>) ----------------
+async function checkIncomingGift() {
+  const m = (location.hash || "").match(/gift=([0-9a-fA-F]{64})/);
+  const banner = $("gift-banner");
+  if (!m) {
+    banner.classList.remove("show");
+    pendingGift = null;
+    return;
+  }
+  try {
+    const gw = deriveWallet(fromHex(m[1]));
+    const acct = await apiGet(`/account/${gw.address}`);
+    const bal = Number(acct.balance_micro || 0);
+    banner.classList.add("show");
+    if (bal > 2000) {
+      pendingGift = { wallet: gw, balanceMicro: bal };
+      $("gift-desc").innerHTML = `Vault <span class="mono">${short(gw.address, 12)}</span> holds <b>${fmt(bal / COIN)} AURA</b> ready to sweep into your personal Post-Quantum wallet (<span class="mono">${short(wallet.address, 10)}</span>).`;
+      $("btn-claim-gift").disabled = false;
+    } else {
+      pendingGift = null;
+      $("gift-desc").textContent = "This AURA gift link has already been claimed (or is awaiting block confirmation).";
+      $("btn-claim-gift").disabled = true;
+    }
+  } catch (e) {
+    console.warn("Gift check error:", e);
+  }
+}
+
+async function claimIncomingGift() {
+  if (!pendingGift) return;
+  const btn = $("btn-claim-gift");
+  btn.disabled = true;
+  $("gift-desc").textContent = "Sweeping AURA gift on-chain with Hybrid ML-DSA-44 signature…";
+  try {
+    const inf = await apiGet("/info");
+    const fee = (inf.base_fee_micro || 1000) * 2;
+    const sweepAmt = pendingGift.balanceMicro - fee;
+    if (sweepAmt <= 0) throw new Error("Gift balance too small to cover fee");
+    const j = await submitSignedTx("transfer", wallet.address, sweepAmt, "", null, false, pendingGift.wallet);
+    history.replaceState(null, "", location.pathname + location.search);
+    $("gift-desc").innerHTML = `🎉 Claimed <b>${fmt(sweepAmt / COIN)} AURA</b> into your wallet! TXID: <span class="mono">${j.txid.slice(0, 20)}…</span>`;
+    setTimeout(() => $("gift-banner").classList.remove("show"), 6000);
+  } catch (e) {
+    $("gift-desc").textContent = `Claim failed: ${e.message || e}`;
+    btn.disabled = false;
+  }
+}
+
+async function createGiftLink() {
+  const out = $("gift-out");
+  try {
+    const giftAura = Number($("gift-amt").value);
+    if (!isFinite(giftAura) || giftAura <= 0) throw new Error("Enter a gift amount > 0 AURA");
+    const giftSeed = crypto.getRandomValues(new Uint8Array(32));
+    const giftWallet = deriveWallet(giftSeed);
+    // Add 0.01 AURA buffer so recipient can sweep with zero prior gas
+    const lockMicro = Math.round(giftAura * COIN) + 10_000;
+    await submitSignedTx("transfer", giftWallet.address, lockMicro, "", "gift-out");
+    const url = `${location.origin}/#gift=${giftWallet.seedHex}`;
+    const msg = `I sent you ${giftAura} Post-Quantum AURA on AuraChain Quantum! Click to claim it in 1 click:`;
+    out.innerHTML = `<div class="toast ok" style="margin-top:10px">
+      <b>🎁 Magic Gift Link Ready (${giftAura} AURA locked in ${short(giftWallet.address, 10)})!</b>
+      <div class="row" style="margin-top:8px">
+        <input id="generated-gift-url" class="mono" readonly value="${esc(url)}" style="flex:1">
+        <button type="button" class="btn cyan" data-action="copy" data-target="generated-gift-url">Copy</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <a href="https://wa.me/?text=${encodeURIComponent(msg + " " + url)}" target="_blank" rel="noopener" class="btn green">Send on WhatsApp</a>
+        <a href="https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" class="btn cyan">Send on Telegram</a>
+        <a href="https://twitter.com/intent/tweet?text=${encodeURIComponent(msg)}&url=${encodeURIComponent(url)}" target="_blank" rel="noopener" class="btn">Post Gift Drop on X</a>
+      </div>
+    </div>`;
+  } catch (_) {}
+}
+
 // ---------------- Live Data Refresh ----------------
 async function refreshAll() {
   try {
-    const [i, eco, acct] = await Promise.all([
+    const [i, eco, act, acct] = await Promise.all([
       apiGet("/info"),
       apiGet("/ecosystem"),
+      apiGet("/activity"),
       wallet ? apiGet(`/account/${wallet.address}`) : Promise.resolve(null),
     ]);
-    chainInfo = i;
-    myAccount = acct;
 
     $("net").textContent = `${i.network} · ${i.self_url} · storage: ${i.storage || "local"} · mempool: ${i.mempool}`;
     $("height").textContent = `#${Number(i.height || 0).toLocaleString()}`;
@@ -690,17 +915,33 @@ async function refreshAll() {
     $("staked").textContent = `${fmt(i.total_staked)} AURA`;
     $("reward").textContent = `${fmt(i.block_reward)} AURA`;
     $("powrew-sub").textContent = `Browser PoW share: ${fmt(i.pow_claim_reward)} AURA`;
-    $("eco-counts").textContent = `${i.tokens_count} Tok · ${i.nfts_count} NFT · ${i.proposals_count} AIP`;
+    $("eco-counts").textContent = `${i.tokens_count} Tok · ${i.nfts_count} NFT · ${act.messages_count || 0} Posts`;
     $("posh").textContent = i.pos_start_height;
     $("prog").style.width = Math.min(100, (100 * i.height) / i.pos_start_height) + "%";
     $("gen").textContent = `Genesis ${i.genesis_hash.slice(0, 24)}… — "${i.genesis_message}"`;
     $("log").textContent = (i.log || []).join("\n");
 
+    // Live Adoption & Users Telemetry
+    const hw = Number(act.human_wallets || 0);
+    $("users-pill").textContent = `👥 ${hw} Human Wallet${hw === 1 ? "" : "s"} · ${act.named_identities || 0} .aura`;
+    $("exp-humans").textContent = `${hw}`;
+    $("exp-handles").textContent = `${act.named_identities || 0} .aura identities · ${act.human_txs || 0} user txs`;
+    $("act-humans").textContent = `${hw}`;
+    $("act-total-w").textContent = `${act.total_wallets || 1} total on-chain (+1 Cloud Validator)`;
+    $("act-names").textContent = `${act.named_identities || 0}`;
+    $("act-htxs").textContent = `${act.human_txs || 0}`;
+    const bd = act.tx_breakdown || {};
+    $("act-breakdown").textContent = `${bd.powmine || 0} PoW · ${bd.transfer || 0} Send · ${(bd.claimname || 0) + (bd.postmessage || 0)} Social · ${(bd.buytoken || 0) + (bd.selltoken || 0) + (bd.createtoken || 0)} DEX`;
+    $("act-posts").textContent = `${act.messages_count || 0}`;
+    $("act-refs").textContent = `${act.referrals_count || 0}`;
+    const pCount = Number(act.active_peers_count || 0);
+    $("act-peers").textContent = `${1 + pCount} Active`;
+    $("act-peers-sub").textContent = pCount > 0 ? `1 Cloud Validator + ${pCount} P2P Peer Node(s)` : "1 Cloud Validator · Run CLI to join!";
+
     $("vals").innerHTML = (i.validators || []).length
       ? i.validators.map(v => `<tr><td class="mono">${short(v.address, 14)}</td><td>${fmt(v.stake)}</td><td>${fmt(v.weight)}</td></tr>`).join("")
       : `<tr><td colspan="3" class="sub">No active validators — PoW fallback active</td></tr>`;
 
-    // Only rebuild block rows when chain height advances so clicks never hit stale rows
     if (i.height !== lastRenderedHeight) {
       const from = Math.max(0, i.height - 17);
       const blks = await apiGet(`/blocks?from=${from}&limit=20`);
@@ -725,10 +966,13 @@ async function refreshAll() {
       lastRenderedHeight = i.height;
     }
 
-    // Wallet stats
+    // Wallet stats + Handle badge
     if (acct) {
-      $("hdr-wallet").textContent = `${wallet.address.slice(0, 10)}… · ${fmt(acct.balance)} AURA`;
+      const myLabel = acct.handle ? `@${acct.handle}.aura` : `${wallet.address.slice(0, 10)}…`;
+      $("hdr-wallet").textContent = `${myLabel} · ${fmt(acct.balance)} AURA`;
       $("w-bal").textContent = fmt(acct.balance);
+      $("w-handle-sub").textContent = acct.handle ? `@${acct.handle}.aura` : "AURA (claim @name.aura in Town Square!)";
+      $("my-handle-badge").textContent = acct.handle ? `✅ @${acct.handle}.aura` : "No @handle yet";
       $("w-stake").textContent = fmt(acct.stake);
       $("w-nonce").textContent = acct.next_nonce;
       $("w-del").textContent = acct.delegate ? `Delegated → ${short(acct.delegate, 10)}` : "Self-delegated";
@@ -738,6 +982,59 @@ async function refreshAll() {
       const no = (acct.nfts_owned || []).length ? `NFTs owned: #${acct.nfts_owned.join(", #")}` : "";
       $("w-assets").textContent = [tb, no].filter(Boolean).join(" | ") || "No community tokens or NFTs held yet.";
     }
+
+    // Town Square Wall
+    const nowSec = Date.now() / 1000;
+    $("wall-list").innerHTML = (act.messages || []).length
+      ? act.messages.map(m => {
+          const who = m.handle ? `<b style="color:var(--cyan)">@${esc(m.handle)}.aura</b> <span class="sub mono">(${short(m.author, 9)})</span>` : `<span class="mono"><b>${short(m.author, 13)}</b></span>`;
+          const age = m.timestamp ? `${Math.max(0, Math.round(nowSec - m.timestamp))}s ago` : `Block #${m.height}`;
+          const tipBadge = m.tip_aura ? `<span class="pill pos">💸 +${fmt(m.tip_aura)} AURA tip</span>` : "";
+          return `<div class="post-card">
+            <div class="row" style="justify-content:space-between;font-size:12px">
+              <span>${who} ${tipBadge}</span>
+              <span class="sub">Block #${m.height} · ${age}</span>
+            </div>
+            <div style="font-size:13.5px;white-space:pre-wrap">${esc(m.message)}</div>
+            <div class="row" style="justify-content:flex-end">
+              <button type="button" class="btn ghost" style="padding:3px 9px;font-size:11px" data-action="tip-author" data-author="${esc(m.author)}">💸 Tip 1 AURA</button>
+            </div>
+          </div>`;
+        }).join("")
+      : `<div class="sub" style="padding:12px">No posts on the Quantum Town Square yet — mine 50 AURA for free and post the very first message!</div>`;
+
+    // Live Human & Ecosystem Activity Stream
+    $("activity-feed").innerHTML = (act.recent_events || []).length
+      ? act.recent_events.map(ev => {
+          const badgeCls = ev.kind === "powmine" ? "pow" : (ev.kind === "claimname" || ev.kind === "postmessage" ? "usr" : "pos");
+          const age = ev.timestamp ? `${Math.max(0, Math.round(nowSec - ev.timestamp))}s ago` : "";
+          return `<div class="feed-item">
+            <div>
+              <span class="pill ${badgeCls}" style="margin-right:6px">${esc(ev.kind)}</span>
+              <span>${esc(ev.summary)}</span>
+            </div>
+            <div class="sub mono">Blk #${ev.height} · ${esc(ev.tx_id.slice(0, 10))}… · ${age}</div>
+          </div>`;
+        }).join("")
+      : `<div class="sub">Waiting for transactions…</div>`;
+
+    // Leaderboard
+    $("leaderboard-rows").innerHTML = (act.leaderboard || []).map(r => {
+      const ident = r.handle
+        ? `<b style="color:var(--cyan)">@${esc(r.handle)}.aura</b> <span class="sub mono">${short(r.address, 8)}</span>`
+        : `<span class="mono">${short(r.address, 12)}</span>`;
+      const role = r.is_genesis_validator
+        ? `<span class="pill fin">Cloud Validator</span>`
+        : `<span class="pill usr">Human User</span>`;
+      return `<tr>
+        <td><b>#${r.rank}</b></td>
+        <td>${ident}</td>
+        <td>${role}</td>
+        <td>${fmt(r.balance_aura)}</td>
+        <td>${fmt(r.stake_aura)}</td>
+        <td>${r.nonce}</td>
+      </tr>`;
+    }).join("");
 
     // Ecosystem: DEX tokens
     $("dex-tokens").innerHTML = (eco.tokens || []).map(t => `
@@ -797,7 +1094,7 @@ async function refreshAll() {
   }
 }
 
-// ---------------- Interactive Actions (CSP-Clean Event Delegation) ----------------
+// ---------------- Interactive Actions (100% CSP-Clean Event Delegation) ----------------
 function switchTab(name) {
   document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tabpane").forEach(p => p.classList.toggle("active", p.id === `tab-${name}`));
@@ -852,7 +1149,8 @@ async function inspectAddr() {
   if (!a) return;
   try {
     const r = await apiGet(`/account/${a}`);
-    $("acct-res").innerHTML = `Balance: <b>${fmt(r.balance)} AURA</b> · Staked: <b>${fmt(r.stake)} AURA</b> · Nonce: ${r.nonce} · NFTs: ${(r.nfts_owned || []).length}`;
+    const hTag = r.handle ? `@${esc(r.handle)}.aura · ` : "";
+    $("acct-res").innerHTML = `${hTag}Balance: <b>${fmt(r.balance)} AURA</b> · Staked: <b>${fmt(r.stake)} AURA</b> · Nonce: ${r.nonce} · NFTs: ${(r.nfts_owned || []).length}`;
   } catch (e) {
     $("acct-res").textContent = `Error: ${e.message || e}`;
   }
@@ -922,11 +1220,15 @@ async function startMining(continuous) {
       }
 
       if (!mining || !foundHex) break;
+      const payload = savedReferrer && savedReferrer !== wallet.address
+        ? `${anchorH}:${anchorHash}:${foundHex}:${savedReferrer}`
+        : `${anchorH}:${anchorHash}:${foundHex}`;
+      const rewAmt = savedReferrer && savedReferrer !== wallet.address ? "55.000000" : "50.000000";
       addLog(`✨ Valid PoW nonce 0x${foundHex} found (${localHashes.toLocaleString()} SHA3-256 hashes)! Signing Hybrid PQ claim…`);
-      await submitSignedTx("powmine", "", 0, `${anchorH}:${anchorHash}:${foundHex}`, "mine-out", true);
+      await submitSignedTx("powmine", "", 0, payload, "mine-out", true);
       sessionWon++;
       $("m-won").textContent = sessionWon;
-      addLog(`🎉 Minted +50.000000 AURA to ${wallet.address}!`);
+      addLog(`🎉 Minted +${rewAmt} AURA to ${wallet.address}!`);
       if (!autoMine) break;
       await new Promise(r => setTimeout(r, 5500));
     } catch (e) {
@@ -937,7 +1239,7 @@ async function startMining(continuous) {
   stopMining();
 }
 
-// Unified event delegation — zero inline `onclick` attributes required
+// Unified event delegation — zero inline `onclick` attributes anywhere
 document.addEventListener("click", e => {
   const tabTrigger = e.target.closest("[data-tab]");
   if (tabTrigger) {
@@ -953,7 +1255,10 @@ document.addEventListener("click", e => {
   else if (act === "close-inspector") $("block-inspector").style.display = "none";
   else if (act === "verify-merkle") verifyMerkle(Number(el.dataset.height), Number(el.dataset.idx));
   else if (act === "inspect-addr") inspectAddr();
-  else if (act === "copy") navigator.clipboard.writeText($(el.dataset.target).value);
+  else if (act === "copy") {
+    const t = $(el.dataset.target);
+    if (t) navigator.clipboard.writeText(t.value);
+  }
   else if (act === "toggle-seed") { const inp = $("w-seed"); inp.type = inp.type === "password" ? "text" : "password"; }
   else if (act === "import-seed") {
     try {
@@ -962,6 +1267,7 @@ document.addEventListener("click", e => {
       localStorage.setItem("aurachain_quantum_seed_v1", raw.toLowerCase());
       wallet = deriveWallet(fromHex(raw));
       renderWalletStatic();
+      setupShare();
       refreshAll();
     } catch (err) { alert(err.message); }
   }
@@ -970,7 +1276,31 @@ document.addEventListener("click", e => {
     localStorage.setItem("aurachain_quantum_seed_v1", toHex(seed));
     wallet = deriveWallet(seed);
     renderWalletStatic();
+    setupShare();
     refreshAll();
+  }
+  else if (act === "claim-name") {
+    const raw = $("claim-handle").value.trim();
+    if (!raw) return;
+    submitSignedTx("claimname", "", 0, raw, "claim-out");
+  }
+  else if (act === "post-message") {
+    const msg = $("post-msg").value.trim();
+    if (!msg) return;
+    const tipTo = $("post-tip-to").value.trim();
+    const tipVal = Number($("post-tip-amt").value || 0);
+    const tipMicro = tipVal > 0 ? Math.round(tipVal * COIN) : 0;
+    submitSignedTx("postmessage", tipTo, tipMicro, msg, "post-out").then(() => { $("post-msg").value = ""; }).catch(() => {});
+  }
+  else if (act === "tip-author") {
+    const author = el.dataset.author;
+    if (author) submitSignedTx("transfer", author, 1 * COIN, "", "post-out");
+  }
+  else if (act === "create-gift") createGiftLink();
+  else if (act === "claim-gift") claimIncomingGift();
+  else if (act === "dismiss-gift") {
+    $("gift-banner").classList.remove("show");
+    history.replaceState(null, "", location.pathname + location.search);
   }
   else if (act === "transfer") submitSignedTx("transfer", $("tx-to").value.trim(), parseAuraMicro($("tx-amt").value), "", "tx-out");
   else if (act === "stake") submitSignedTx("stake", "", parseAuraMicro($("stk-amt").value), "", "stk-out");
@@ -996,33 +1326,36 @@ document.addEventListener("click", e => {
   else if (act === "propose") submitSignedTx("propose", "", 0, `${$("aip-title").value.trim()}|${$("aip-sum").value.trim()}`, "dao-out");
   else if (act === "vote") submitSignedTx("vote", "", 0, `${el.dataset.id}:${el.dataset.choice}`, "dao-out");
   else if (act === "anchor") submitSignedTx("anchor", "", 0, $("anc-data").value.trim(), "anc-out");
-  else if (act === "copy-invite") {
-    navigator.clipboard.writeText(`Experience AuraChain Quantum v1.0 (Post-Quantum NIST FIPS 204 ML-DSA-44 L1 — mine 50 AURA free in browser): ${location.origin}`);
-    $("sh-msg").innerHTML = `<div class="toast ok">Copied launch invite link to clipboard!</div>`;
-  }
 });
 
-// ---------------- Share & Node Commands ----------------
+// ---------------- Referral Share & Node Commands ----------------
 function setupShare() {
-  const url = location.origin;
-  const text = "AuraChain Quantum v1.0 is LIVE — Autonomous Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) L1 Blockchain with 0% pre-mine, browser SHA3-256 mining, DEX, Royalty NFTs & DAO:";
-  $("sh-x").href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
-  $("sh-rd").href = `https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}`;
-  $("sh-hn").href = `https://news.ycombinator.com/submitlink?u=${encodeURIComponent(url)}&t=${encodeURIComponent("Show HN: AuraChain Quantum – Post-Quantum (FIPS 204 ML-DSA) L1 in Rust")}`;
-  $("sh-tg").href = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  const base = location.origin;
+  const refUrl = `${base}/?ref=${wallet.address}`;
+  $("ref-link").value = refUrl;
+  const text = "Join me on AuraChain Quantum (Post-Quantum NIST FIPS 204 ML-DSA-44 L1) — click to mine +55 free AURA in your browser in 1 second & claim your @name.aura identity:";
+  $("ref-wa").href = `https://wa.me/?text=${encodeURIComponent(text + " " + refUrl)}`;
+  $("ref-tg").href = `https://t.me/share/url?url=${encodeURIComponent(refUrl)}&text=${encodeURIComponent(text)}`;
+  $("ref-x").href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(refUrl)}`;
+  $("ref-rd").href = `https://www.reddit.com/submit?url=${encodeURIComponent(refUrl)}&title=${encodeURIComponent("AuraChain Quantum v1.1 – Post-Quantum (NIST FIPS 204 ML-DSA) L1 with Browser SHA3 Mining & Town Square")}`;
   $("peer-cmd").textContent =
 `# 1. Generate a Post-Quantum (ML-DSA-44 + Ed25519) validator keypair
 aurachain keygen --out my-quantum-wallet.json
 
 # 2. Claim 50 AURA via permissionless SHA3-256 PoW share
-aurachain pow-claim --key my-quantum-wallet.json --node ${url}
+aurachain pow-claim --key my-quantum-wallet.json --node ${base}
 
-# 3. Sync & run a local full verifying peer node connected to the live network
-aurachain node --port 7001 --data ./aura-data --key my-quantum-wallet.json --peer ${url}`;
+# 3. Claim your @name.aura identity & post on the Town Square
+aurachain claim-name --key my-quantum-wallet.json --handle myname --node ${base}
+aurachain post --key my-quantum-wallet.json --message "Running a sovereign peer node!" --node ${base}
+
+# 4. Sync & run a local full verifying peer node connected to the live network
+aurachain node --port 7001 --data ./aura-data --key my-quantum-wallet.json --peer ${base}`;
 }
 
+window.addEventListener("hashchange", checkIncomingGift);
 initWallet();
-setupShare();
+checkIncomingGift();
 refreshAll();
 setInterval(() => { if (!document.hidden) refreshAll(); }, 5000);
 </script>

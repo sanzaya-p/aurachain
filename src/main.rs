@@ -1,5 +1,6 @@
 //! AuraChain Quantum v1.0 CLI: Post-Quantum wallet, P2P node, PoW share miner,
 //! staking/delegation, DAO governance, AuraLaunch DEX, AUA NFTs, and L2 Metropolis sequencer.
+#![recursion_limit = "256"]
 
 mod chain;
 mod crypto;
@@ -12,18 +13,21 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-const DEFAULT_NODE: &str = "https://aurachain-drab.vercel.app";
+const DEFAULT_NODE: &str = "https://aurachain-quantum.vercel.app";
 
-const HELP: &str = r#"AuraChain Quantum v1.0 — Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) Sovereign L1 + Rollup
+const HELP: &str = r#"AuraChain Quantum v1.1 — Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) Sovereign L1 + Rollup
 
 USAGE:
   aurachain keygen       --out <file.json>
   aurachain address      --key <file.json>
   aurachain node         --port <p> --data <dir> [--key <file.json> | --key-env <VAR>] [--mine] [--peer <url>]...
   aurachain info         [--node <url>]
+  aurachain activity     [--node <url>]                               (live human wallets, Town Square, leaderboard & tx feed)
   aurachain ecosystem    [--node <url>]
   aurachain balance      <address> [--node <url>]
-  aurachain pow-claim    --key <file.json> [--node <url>]            (permissionless 0-fee SHA3-256 PoW mining)
+  aurachain pow-claim    --key <file.json> [--ref <aura1q...>] [--node <url>]  (0-fee SHA3-256 PoW mining; +55 AURA w/ ref)
+  aurachain claim-name   --key <file> --handle <name> [--node <url>]  (claim @name.aura Quantum identity)
+  aurachain post         --key <file> --message <text> [--to <aura1q...> --amount <AURA>] [--node <url>]
   aurachain send         --key <file> --to <aura1q...> --amount <AURA> [--node <url>]
   aurachain stake        --key <file> --amount <AURA> [--node <url>]
   aurachain unstake      --key <file> --amount <AURA> [--node <url>]
@@ -36,7 +40,7 @@ USAGE:
   aurachain anchor       --key <file> --data <text> [--node <url>]
   aurachain l2           --key <file> [--node <url>] [--interval <secs>]
 
-Default public network node: https://aurachain-drab.vercel.app
+Default public network node: https://aurachain-quantum.vercel.app
 "#;
 
 struct Args {
@@ -142,7 +146,10 @@ fn pow_claim(a: &Args) {
         let h = chain::pow_claim_hash(&anchor_hash, &addr, &s);
         if chain::hash_value(&h) <= target {
             println!("Found valid PoW nonce {s} in {:.2}s! Submitting Hybrid-PQ claim…", started.elapsed().as_secs_f64());
-            let data = format!("{anchor_h}:{anchor_hash}:{s}");
+            let data = match a.get("ref").filter(|r| !r.is_empty()) {
+                Some(r) => format!("{anchor_h}:{anchor_hash}:{s}:{r}"),
+                None => format!("{anchor_h}:{anchor_hash}:{s}"),
+            };
             let tx = Tx::new(TxKind::PowMine, &kp, "", 0, 0, acct["next_nonce"].as_u64().unwrap_or(0), &data);
             let r = http_post(&format!("{node}/tx"), serde_json::to_value(&tx).unwrap());
             println!("{}", serde_json::to_string_pretty(&r).unwrap());
@@ -365,11 +372,22 @@ fn main() {
         "ecosystem" => {
             println!("{}", serde_json::to_string_pretty(&http_get(&format!("{}/ecosystem", a.node()))).unwrap());
         }
+        "activity" => {
+            println!("{}", serde_json::to_string_pretty(&http_get(&format!("{}/activity", a.node()))).unwrap());
+        }
         "balance" => {
             let addr = a.pos.get(1).cloned().unwrap_or_else(|| die("usage: balance <aura1q_address>"));
             println!("{}", serde_json::to_string_pretty(&http_get(&format!("{}/account/{addr}", a.node()))).unwrap());
         }
         "pow-claim" => pow_claim(&a),
+        "claim-name" => submit(&a, TxKind::ClaimName, "", 0, &a.req("handle")),
+        "post" => {
+            let tip = match a.get("amount") {
+                Some(v) if !v.is_empty() => chain::parse_aura(&v).unwrap_or_else(|e| die(&e)),
+                _ => 0,
+            };
+            submit(&a, TxKind::PostMessage, &a.get("to").unwrap_or_default(), tip, &a.req("message"));
+        }
         "send" => {
             let amt = chain::parse_aura(&a.req("amount")).unwrap_or_else(|e| die(&e));
             submit(&a, TxKind::Transfer, &a.req("to"), amt, "");

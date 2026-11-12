@@ -1,11 +1,11 @@
 [package]
 name = "aurachain"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
-description = "AuraChain Quantum v1.0: Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) fair-launch PoW -> VPoS L1 with BFT finality, EIP-1559 burn, DAO governance, AuraLaunch DEX, AUA royalty NFTs, and L2 Metropolis anchoring"
+description = "AuraChain Quantum v1.1: Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) fair-launch PoW -> VPoS L1 with BFT finality, .aura identities, Town Square, DEX, AUA royalty NFTs, DAO, and L2 Metropolis anchoring"
 license = "MIT"
 repository = "https://github.com/sanzaya-p/aurachain"
-homepage = "https://aurachain-drab.vercel.app"
+homepage = "https://aurachain-quantum.vercel.app"
 keywords = ["blockchain", "post-quantum", "ml-dsa", "proof-of-stake", "rollup"]
 
 [dependencies]

@@ -1,8 +1,8 @@
 [package]
 name = "aurachain-node"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
-description = "AuraChain Quantum v1.0 serverless VPoS + L2 autonomous node for Vercel (Post-Quantum NIST FIPS 204 ML-DSA-44 + Ed25519)"
+description = "AuraChain Quantum v1.1 serverless VPoS + L2 autonomous node for Vercel (Post-Quantum NIST FIPS 204 ML-DSA-44 + Ed25519)"
 license = "MIT"
 
 [dependencies]

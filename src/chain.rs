@@ -27,6 +27,8 @@ pub const MAX_SUPPLY: u64 = 10_000_000_000 * COIN; // 10 Billion AURA hard cap
 pub const INITIAL_REWARD: u64 = 5_000 * COIN;
 pub const HALVING_INTERVAL: u64 = 1_000_000;
 pub const POW_CLAIM_REWARD: u64 = 50 * COIN; // 50 AURA per valid permissionless PoW share
+pub const POW_REFERRAL_REWARD: u64 = 10 * COIN; // +10 AURA bonus to referrer on invited PoW share
+pub const POW_REFEREE_BONUS: u64 = 5 * COIN; // +5 AURA welcome bonus to invited miner (55 AURA total)
 pub const TARGET_BLOCK_SECS: u64 = 5;
 pub const RETARGET_WINDOW: u64 = 5;
 pub const POS_START_HEIGHT: u64 = 20; // PoW fair-launch bootstrap -> VPoS at height 20
@@ -99,6 +101,8 @@ pub enum TxKind {
     MintNft,
     ListNft,
     BuyNft,
+    ClaimName,
+    PostMessage,
     Anchor,
     Attest,
 }
@@ -120,6 +124,8 @@ impl TxKind {
             TxKind::MintNft => "mintnft",
             TxKind::ListNft => "listnft",
             TxKind::BuyNft => "buynft",
+            TxKind::ClaimName => "claimname",
+            TxKind::PostMessage => "postmessage",
             TxKind::Anchor => "anchor",
             TxKind::Attest => "attest",
         }
@@ -451,6 +457,47 @@ pub struct SlashRecord {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SocialPost {
+    pub id: u64,
+    pub height: u64,
+    pub timestamp: u64,
+    pub author: String,
+    pub message: String,
+    pub tip_aura: u64,
+    pub tip_to: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ActivityEvent {
+    pub height: u64,
+    pub timestamp: u64,
+    pub tx_id: String,
+    pub kind: String,
+    pub actor: String,
+    pub target: String,
+    pub amount: u64,
+    pub summary: String,
+}
+
+pub fn normalize_handle(raw: &str) -> Result<String, String> {
+    let h = raw
+        .trim()
+        .trim_start_matches('@')
+        .trim_end_matches(".aura")
+        .to_ascii_lowercase();
+    if h.len() < 3 || h.len() > 20 {
+        return Err("handle must be 3..20 characters".into());
+    }
+    if !h.chars().next().unwrap().is_ascii_lowercase() {
+        return Err("handle must start with a lowercase letter (a-z)".into());
+    }
+    if !h.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
+        return Err("handle may only contain lowercase letters, digits, and _".into());
+    }
+    Ok(h)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct State {
     pub accounts: BTreeMap<String, Account>,
     pub minted: u64,
@@ -482,6 +529,22 @@ pub struct State {
     pub nfts: BTreeMap<u64, NftItem>,
     #[serde(default)]
     pub l2_batches: Vec<L2Batch>,
+    #[serde(default)]
+    pub names: BTreeMap<String, String>,
+    #[serde(default)]
+    pub address_names: BTreeMap<String, String>,
+    #[serde(default)]
+    pub next_post_id: u64,
+    #[serde(default)]
+    pub messages: Vec<SocialPost>,
+    #[serde(default)]
+    pub referrals_count: u64,
+    #[serde(default)]
+    pub total_txs: u64,
+    #[serde(default)]
+    pub tx_counts: BTreeMap<String, u64>,
+    #[serde(default)]
+    pub recent_events: Vec<ActivityEvent>,
 }
 
 impl State {
@@ -505,22 +568,46 @@ impl State {
             tokens: BTreeMap::new(),
             nfts: BTreeMap::new(),
             l2_batches: vec![],
+            names: BTreeMap::new(),
+            address_names: BTreeMap::new(),
+            next_post_id: 0,
+            messages: vec![],
+            referrals_count: 0,
+            total_txs: 0,
+            tx_counts: BTreeMap::new(),
+            recent_events: vec![],
         }
     }
 
     /// Deterministic SHA3-256 commitment over the entire L1 + ecosystem state.
     pub fn root(&self) -> String {
-        let v = serde_json::json!({
-            "accounts": self.accounts,
-            "minted": self.minted,
-            "burned": self.burned,
-            "finalized_height": self.finalized_height,
-            "slashed": self.slashed,
-            "proposals": self.proposals,
-            "tokens": self.tokens,
-            "nfts": self.nfts,
-            "l2_count": self.l2_batches.len(),
-        });
+        let v = if self.names.is_empty() && self.next_post_id == 0 {
+            serde_json::json!({
+                "accounts": self.accounts,
+                "minted": self.minted,
+                "burned": self.burned,
+                "finalized_height": self.finalized_height,
+                "slashed": self.slashed,
+                "proposals": self.proposals,
+                "tokens": self.tokens,
+                "nfts": self.nfts,
+                "l2_count": self.l2_batches.len(),
+            })
+        } else {
+            serde_json::json!({
+                "accounts": self.accounts,
+                "minted": self.minted,
+                "burned": self.burned,
+                "finalized_height": self.finalized_height,
+                "slashed": self.slashed,
+                "proposals": self.proposals,
+                "tokens": self.tokens,
+                "nfts": self.nfts,
+                "l2_count": self.l2_batches.len(),
+                "names": self.names,
+                "posts_count": self.next_post_id,
+            })
+        };
         sha3_256_hex(&serde_json::to_vec(&v).unwrap())
     }
 
@@ -744,13 +831,19 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
             if tx.fee > acct.balance {
                 return Err("insufficient balance for optional fee".into());
             }
-            let parts: Vec<&str> = tx.data.splitn(3, ':').collect();
-            if parts.len() != 3 {
-                return Err("powmine data must be <anchor_height>:<anchor_hash>:<pow_nonce>".into());
+            let parts: Vec<&str> = tx.data.split(':').collect();
+            if parts.len() != 3 && parts.len() != 4 {
+                return Err("powmine data must be <anchor_height>:<anchor_hash>:<pow_nonce>[:<referrer>]".into());
             }
             let anchor_h: u64 = parts[0].parse().map_err(|_| "bad anchor height")?;
             let anchor_hash = parts[1];
             let pow_nonce = parts[2];
+            let referrer_opt = parts.get(3).map(|r| r.trim()).filter(|r| !r.is_empty());
+            if let Some(ref_addr) = referrer_opt {
+                if !crypto::is_valid_address(ref_addr) {
+                    return Err("invalid referrer quantum address".into());
+                }
+            }
             if pow_nonce.is_empty() || pow_nonce.len() > 64 {
                 return Err("bad pow nonce".into());
             }
@@ -769,7 +862,13 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
             if hash_value(&digest) > s.pow_claim_target {
                 return Err("insufficient SHA3-256 proof-of-work for powmine claim".into());
             }
-            let reward = POW_CLAIM_REWARD.min(MAX_SUPPLY.saturating_sub(s.minted));
+            let valid_ref = referrer_opt.filter(|r| *r != from);
+            let desired_miner = if valid_ref.is_some() {
+                POW_CLAIM_REWARD + POW_REFEREE_BONUS
+            } else {
+                POW_CLAIM_REWARD
+            };
+            let reward = desired_miner.min(MAX_SUPPLY.saturating_sub(s.minted));
             if reward == 0 {
                 return Err("max supply reached".into());
             }
@@ -777,6 +876,14 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
             acct.nonce += 1;
             s.minted += reward;
             s.accounts.insert(from, acct);
+            if let Some(ref_addr) = valid_ref {
+                let ref_rew = POW_REFERRAL_REWARD.min(MAX_SUPPLY.saturating_sub(s.minted));
+                if ref_rew > 0 {
+                    s.minted += ref_rew;
+                    s.accounts.entry(ref_addr.to_string()).or_default().balance += ref_rew;
+                    s.referrals_count += 1;
+                }
+            }
             s.used_pow_nullifiers.insert(nullifier);
             if s.used_pow_nullifiers.len() > 2_000 {
                 let first = s.used_pow_nullifiers.iter().next().cloned().unwrap();
@@ -1011,6 +1118,61 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
             nft.sales += 1;
         }
 
+        TxKind::ClaimName => {
+            need(&acct, tx.fee)?;
+            let handle = normalize_handle(&tx.data)?;
+            if let Some(existing_owner) = s.names.get(&handle) {
+                if existing_owner != &from {
+                    return Err(format!("@{handle}.aura is already claimed by another wallet"));
+                }
+            }
+            if let Some(prev_handle) = s.address_names.insert(from.clone(), handle.clone()) {
+                if prev_handle != handle {
+                    s.names.remove(&prev_handle);
+                }
+            }
+            s.names.insert(handle, from.clone());
+            acct.balance -= tx.fee;
+            acct.nonce += 1;
+            s.accounts.insert(from, acct);
+        }
+
+        TxKind::PostMessage => {
+            let msg = tx.data.trim();
+            if msg.is_empty() || msg.chars().count() > 280 || msg.chars().any(|c| c.is_control() && c != '\n') {
+                return Err("postmessage must be 1..280 printable characters".into());
+            }
+            let total_cost = tx.amount.checked_add(tx.fee).ok_or("overflow")?;
+            need(&acct, total_cost)?;
+            if !tx.to.is_empty() {
+                if !crypto::is_valid_address(&tx.to) {
+                    return Err("invalid tip recipient quantum address".into());
+                }
+                if tx.amount > 0 {
+                    s.accounts.entry(tx.to.clone()).or_default().balance += tx.amount;
+                }
+            } else if tx.amount > 0 {
+                s.burned += tx.amount;
+            }
+            acct.balance -= total_cost;
+            acct.nonce += 1;
+            s.accounts.insert(from.clone(), acct);
+            let id = s.next_post_id + 1;
+            s.next_post_id = id;
+            s.messages.push(SocialPost {
+                id,
+                height: block_height,
+                timestamp: 0,
+                author: from,
+                message: msg.to_string(),
+                tip_aura: tx.amount,
+                tip_to: tx.to.clone(),
+            });
+            if s.messages.len() > 80 {
+                s.messages.remove(0);
+            }
+        }
+
         TxKind::Anchor => {
             if tx.data.is_empty() || tx.amount != 0 {
                 return Err("anchor needs non-empty batch commitment and amount 0".into());
@@ -1076,6 +1238,72 @@ fn record_checkpoint_vote(s: &mut State, cp_h: u64, cp_hash: &str, validator: &s
     }
 }
 
+fn describe_tx_event(s: &State, tx: &Tx, actor: &str) -> (String, u64, String) {
+    let who = s
+        .address_names
+        .get(actor)
+        .map(|h| format!("@{h}.aura"))
+        .unwrap_or_else(|| format!("{}…", &actor[..12.min(actor.len())]));
+    match tx.kind {
+        TxKind::PowMine => {
+            let parts: Vec<&str> = tx.data.split(':').collect();
+            let ref_opt = parts.get(3).copied().filter(|r| !r.is_empty() && *r != actor);
+            if let Some(r) = ref_opt {
+                (
+                    r.to_string(),
+                    POW_CLAIM_REWARD + POW_REFEREE_BONUS,
+                    format!("{who} mined +55 AURA via SHA3-256 PoW (+10 AURA referral bonus)"),
+                )
+            } else {
+                (String::new(), POW_CLAIM_REWARD, format!("{who} mined +50 AURA via browser/CPU SHA3-256 PoW"))
+            }
+        }
+        TxKind::Transfer => {
+            let to_disp = s
+                .address_names
+                .get(&tx.to)
+                .map(|h| format!("@{h}.aura"))
+                .unwrap_or_else(|| format!("{}…", &tx.to[..12.min(tx.to.len())]));
+            (tx.to.clone(), tx.amount, format!("{who} sent {} AURA to {to_disp}", fmt_aura(tx.amount)))
+        }
+        TxKind::ClaimName => {
+            let h = normalize_handle(&tx.data).unwrap_or_else(|_| tx.data.clone());
+            (String::new(), 0, format!("Claimed quantum identity @{h}.aura"))
+        }
+        TxKind::PostMessage => {
+            let snippet: String = tx.data.trim().chars().take(72).collect();
+            (tx.to.clone(), tx.amount, format!("{who} posted on Town Square: \"{snippet}\""))
+        }
+        TxKind::Stake => (String::new(), tx.amount, format!("{who} staked {} AURA in VPoS", fmt_aura(tx.amount))),
+        TxKind::Unstake => (String::new(), tx.amount, format!("{who} unstaked {} AURA", fmt_aura(tx.amount))),
+        TxKind::Delegate => (tx.to.clone(), 0, format!("{who} updated VPoS stake delegation")),
+        TxKind::CreateToken => {
+            let sym = tx.data.split('|').next().unwrap_or(&tx.data).trim().to_ascii_uppercase();
+            (sym.clone(), 0, format!("{who} launched token {sym} on AuraLaunch DEX"))
+        }
+        TxKind::BuyToken => (
+            tx.data.trim().to_ascii_uppercase(),
+            tx.amount,
+            format!("{who} swapped {} AURA for {}", fmt_aura(tx.amount), tx.data.trim().to_ascii_uppercase()),
+        ),
+        TxKind::SellToken => (
+            tx.data.trim().to_ascii_uppercase(),
+            tx.amount,
+            format!("{who} sold {} {} on DEX", fmt_aura(tx.amount), tx.data.trim().to_ascii_uppercase()),
+        ),
+        TxKind::MintNft => (String::new(), 0, format!("{who} minted an AUA Quantum NFT")),
+        TxKind::ListNft => (tx.data.clone(), tx.amount, format!("{who} listed NFT #{} for {} AURA", tx.data.trim(), fmt_aura(tx.amount))),
+        TxKind::BuyNft => (tx.data.clone(), tx.amount, format!("{who} purchased NFT #{} for {} AURA", tx.data.trim(), fmt_aura(tx.amount))),
+        TxKind::Propose => {
+            let title = tx.data.split('|').next().unwrap_or("AIP").trim();
+            (String::new(), 0, format!("{who} submitted DAO proposal \"{title}\""))
+        }
+        TxKind::Vote => (tx.data.clone(), 0, format!("{who} voted on DAO proposal ({})", tx.data)),
+        TxKind::Slash => (String::new(), 0, format!("{who} slashed equivocating validator")),
+        TxKind::Anchor | TxKind::Attest => (String::new(), 0, String::new()),
+    }
+}
+
 /// Execute a block's transactions, unbonding maturities, PoW claim retargeting,
 /// BFT checkpoint votes, and block rewards on a copy of `s`.
 fn execute(s: &State, prev_hash: &str, h: &Header, txs: &[Tx], target: u128) -> Result<State, String> {
@@ -1102,7 +1330,7 @@ fn execute(s: &State, prev_hash: &str, h: &Header, txs: &[Tx], target: u128) -> 
         }
     }
 
-    // 2. Apply transactions, burning EIP-1559 base fee on non-zero-fee txs.
+    // 2. Apply transactions, burning EIP-1559 base fee on non-zero-fee txs, and record telemetry.
     let mut tips = 0u64;
     let mut pow_claims_in_block = 0usize;
     for (i, tx) in txs.iter().enumerate() {
@@ -1113,6 +1341,33 @@ fn execute(s: &State, prev_hash: &str, h: &Header, txs: &[Tx], target: u128) -> 
         } else {
             n.burned += h.base_fee;
             tips += tx.fee - h.base_fee;
+        }
+        n.total_txs += 1;
+        *n.tx_counts.entry(tx.kind.as_str().to_string()).or_insert(0) += 1;
+        if tx.kind == TxKind::PostMessage {
+            if let Some(last_msg) = n.messages.last_mut() {
+                if last_msg.timestamp == 0 {
+                    last_msg.timestamp = h.timestamp;
+                }
+            }
+        }
+        if tx.kind != TxKind::Anchor && tx.kind != TxKind::Attest {
+            let actor = tx.sender().unwrap_or_default();
+            let (target, amount, summary) = describe_tx_event(&n, tx, &actor);
+            let tx_id = tx.id();
+            n.recent_events.push(ActivityEvent {
+                height: h.height,
+                timestamp: h.timestamp,
+                tx_id: tx_id[..16.min(tx_id.len())].to_string(),
+                kind: tx.kind.as_str().to_string(),
+                actor,
+                target,
+                amount,
+                summary,
+            });
+            if n.recent_events.len() > 60 {
+                n.recent_events.remove(0);
+            }
         }
     }
 
@@ -1413,5 +1668,49 @@ mod tests {
         apply_tx(&mut sim, &bob_buy, MIN_BASE_FEE, 2).unwrap();
         assert_eq!(sim.account(&val.address()).balance, val_before_royalty + 20 * COIN); // 10% creator royalty!
         assert_eq!(sim.account(&alice.address()).balance, alice_before_sale + 180 * COIN); // 90% seller proceeds!
+
+        // Test .aura Quantum Identity Claim, Town Square Social Post with tip, and Referral PowMine!
+        let claim_alice = Tx::new(TxKind::ClaimName, &alice, "", 0, MIN_BASE_FEE, 3, "@Alice.aura");
+        apply_tx(&mut sim, &claim_alice, MIN_BASE_FEE, 2).unwrap();
+        assert_eq!(sim.address_names.get(&alice.address()).map(String::as_str), Some("alice"));
+        assert_eq!(sim.names.get("alice"), Some(&alice.address()));
+
+        // Bob cannot steal @alice.aura
+        let steal = Tx::new(TxKind::ClaimName, &bob, "", 0, MIN_BASE_FEE, 1, "alice");
+        assert!(apply_tx(&mut sim, &steal, MIN_BASE_FEE, 2).is_err());
+
+        // Alice posts on Quantum Town Square and tips Bob 5 AURA
+        let bob_before_tip = sim.account(&bob.address()).balance;
+        let post_tx = Tx::new(
+            TxKind::PostMessage,
+            &alice,
+            &bob.address(),
+            5 * COIN,
+            MIN_BASE_FEE,
+            4,
+            "Hello Quantum Town Square! First NIST FIPS 204 social post!",
+        );
+        apply_tx(&mut sim, &post_tx, MIN_BASE_FEE, 2).unwrap();
+        assert_eq!(sim.messages.len(), 1);
+        assert_eq!(sim.account(&bob.address()).balance, bob_before_tip + 5 * COIN);
+
+        // New user Carol mines with Alice as referrer -> Carol gets 55 AURA, Alice gets +10 AURA!
+        let carol = Keypair::from_seed_bytes([44u8; 32]);
+        let anchor_hash = blocks[1].header.hash_hex();
+        sim.pow_claim_target = u128::MAX; // instant share for unit test
+        let alice_before_ref = sim.account(&alice.address()).balance;
+        let pow_ref = Tx::new(
+            TxKind::PowMine,
+            &carol,
+            "",
+            0,
+            0,
+            0,
+            &format!("1:{anchor_hash}:deadbeef:{}", alice.address()),
+        );
+        apply_tx(&mut sim, &pow_ref, MIN_BASE_FEE, 2).unwrap();
+        assert_eq!(sim.account(&carol.address()).balance, 55 * COIN);
+        assert_eq!(sim.account(&alice.address()).balance, alice_before_ref + 10 * COIN);
+        assert_eq!(sim.referrals_count, 1);
     }
 }

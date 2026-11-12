@@ -199,6 +199,7 @@ fn broadcast(peers: Vec<String>, path: &'static str, body: Value) {
 
 fn sync_loop(ctx: Arc<Ctx>) {
     let mut round: u64 = 0;
+    let node_id = format!("peer-{:08x}", rand::random::<u32>());
     loop {
         thread::sleep(Duration::from_secs(4));
         round += 1;
@@ -212,7 +213,10 @@ fn sync_loop(ctx: Arc<Ctx>) {
                 Err(_) => continue,
             };
             if round % 20 == 1 {
-                let _ = post_json(&format!("{p}/peers"), &json!({ "url": self_url }));
+                let _ = post_json(
+                    &format!("{p}/peers"),
+                    &json!({ "url": self_url, "node_id": node_id, "height": my_height, "version": env!("CARGO_PKG_VERSION") }),
+                );
             }
             let their: u128 = tip["chainwork"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0);
             if their <= my_work {
@@ -409,6 +413,9 @@ fn info_json(ctx: &Ctx, n: &Node) -> Value {
         "total_staked": chain::fmt_aura(s.total_stake()),
         "validators": vals,
         "accounts": s.accounts.len(),
+        "names_count": s.names.len(),
+        "messages_count": s.next_post_id,
+        "referrals_count": s.referrals_count,
         "proposals_count": s.proposals.len(),
         "tokens_count": s.tokens.len(),
         "nfts_count": s.nfts.len(),
@@ -420,6 +427,96 @@ fn info_json(ctx: &Ctx, n: &Node) -> Value {
         "node_address": ctx.key.as_ref().map(|k| k.address()),
         "hashrate": ctx.hashrate.load(Ordering::Relaxed),
         "log": n.log.iter().rev().take(10).collect::<Vec<_>>(),
+    })
+}
+
+fn activity_json(n: &Node) -> Value {
+    let s = &n.state;
+    let genesis_val = n.blocks.get(1).map(|b| b.header.producer.as_str()).unwrap_or("");
+    let human_wallets = s.accounts.keys().filter(|a| a.as_str() != genesis_val).count();
+    let human_txs: u64 = s
+        .tx_counts
+        .iter()
+        .filter(|(k, _)| k.as_str() != "anchor" && k.as_str() != "attest")
+        .map(|(_, &c)| c)
+        .sum();
+    let mut ranked: Vec<(&String, &chain::Account)> = s.accounts.iter().collect();
+    ranked.sort_by(|a, b| (b.1.balance + b.1.stake).cmp(&(a.1.balance + a.1.stake)));
+    let leaderboard: Vec<Value> = ranked
+        .into_iter()
+        .take(25)
+        .enumerate()
+        .map(|(i, (addr, acc))| {
+            json!({
+                "rank": i + 1,
+                "address": addr,
+                "handle": s.address_names.get(addr),
+                "is_genesis_validator": addr == genesis_val,
+                "balance_aura": chain::fmt_aura(acc.balance),
+                "stake_aura": chain::fmt_aura(acc.stake),
+                "total_aura": chain::fmt_aura(acc.balance + acc.stake),
+                "nonce": acc.nonce,
+            })
+        })
+        .collect();
+    let recent_events: Vec<Value> = s
+        .recent_events
+        .iter()
+        .rev()
+        .take(50)
+        .map(|ev| {
+            json!({
+                "height": ev.height,
+                "timestamp": ev.timestamp,
+                "tx_id": ev.tx_id,
+                "kind": ev.kind,
+                "actor": ev.actor,
+                "actor_handle": s.address_names.get(&ev.actor),
+                "target": ev.target,
+                "target_handle": s.address_names.get(&ev.target),
+                "amount_aura": chain::fmt_aura(ev.amount),
+                "summary": ev.summary,
+            })
+        })
+        .collect();
+    let messages: Vec<Value> = s
+        .messages
+        .iter()
+        .rev()
+        .take(50)
+        .map(|m| {
+            json!({
+                "id": m.id,
+                "height": m.height,
+                "timestamp": m.timestamp,
+                "author": m.author,
+                "handle": s.address_names.get(&m.author),
+                "message": m.message,
+                "tip_aura": if m.tip_aura > 0 { Some(chain::fmt_aura(m.tip_aura)) } else { None },
+                "tip_to": if m.tip_to.is_empty() { None } else { Some(&m.tip_to) },
+            })
+        })
+        .collect();
+    let active_peers: Vec<Value> = n
+        .peers
+        .iter()
+        .map(|u| json!({"id": u, "label": u, "height": n.blocks.len().saturating_sub(1), "last_seen": chain::now_secs()}))
+        .collect();
+    json!({
+        "total_wallets": s.accounts.len(),
+        "human_wallets": human_wallets,
+        "genesis_validator": genesis_val,
+        "named_identities": s.names.len(),
+        "messages_count": s.next_post_id,
+        "referrals_count": s.referrals_count,
+        "total_txs": s.total_txs,
+        "human_txs": human_txs,
+        "tx_breakdown": s.tx_counts,
+        "active_peers_count": active_peers.len(),
+        "active_peers": active_peers,
+        "leaderboard": leaderboard,
+        "recent_events": recent_events,
+        "messages": messages,
     })
 }
 
@@ -545,6 +642,10 @@ fn handle(ctx: &Arc<Ctx>, mut req: tiny_http::Request) {
             let h = n.blocks.last().unwrap().header.height;
             ok(ecosystem_json(&n.state, h))
         }
+        ("GET", "/activity") => {
+            let n = ctx.node.lock().unwrap();
+            ok(activity_json(&n))
+        }
         ("GET", "/blocks") => {
             let n = ctx.node.lock().unwrap();
             let from = q("from").unwrap_or(0) as usize;
@@ -611,6 +712,7 @@ fn handle(ctx: &Arc<Ctx>, mut req: tiny_http::Request) {
                 n.state.nfts.values().filter(|nft| nft.owner == a).map(|nft| nft.id).collect();
             ok(json!({
                 "address": a,
+                "handle": n.state.address_names.get(a),
                 "balance": chain::fmt_aura(acc.balance),
                 "balance_micro": acc.balance,
                 "stake": chain::fmt_aura(acc.stake),
