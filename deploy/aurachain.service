@@ -1,0 +1,18 @@
+[Unit]
+Description=AuraChain VPoS validator node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=aurachain
+ExecStart=/usr/local/bin/aurachain node --port 7001 --data /var/lib/aurachain --key /etc/aurachain/validator.json --host __PUBLIC_IP__
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/aurachain
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

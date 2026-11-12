@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AuraChain Explorer</title>
+<style>
+  :root { --bg:#0b0f17; --panel:#121927; --line:#1f2a3d; --txt:#dce3ee; --mute:#7d8aa3; --aura:#8b5cf6; --pow:#f59e0b; --pos:#10b981; --l2:#38bdf8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+  header { padding:18px 28px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .logo { width:34px; height:34px; border-radius:50%; background:conic-gradient(var(--aura),var(--l2),var(--pos),var(--aura)); box-shadow:0 0 24px #8b5cf655; }
+  h1 { font-size:20px; margin:0; letter-spacing:.3px; }
+  .sub { color:var(--mute); font-size:12px; }
+  .pill { padding:3px 10px; border-radius:999px; font-weight:600; font-size:12px; }
+  .pow { background:#f59e0b22; color:var(--pow); border:1px solid #f59e0b55; }
+  .pos { background:#10b98122; color:var(--pos); border:1px solid #10b98155; }
+  main { padding:22px 28px; display:grid; gap:18px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .card .k { color:var(--mute); font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
+  .card .v { font-size:19px; font-weight:650; margin-top:4px; word-break:break-all; }
+  .grid2 { display:grid; grid-template-columns:2fr 1fr; gap:18px; }
+  @media (max-width:1000px){ .grid2 { grid-template-columns:1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; overflow:auto; }
+  h2 { font-size:14px; margin:0 0 10px; color:#b9c4d8; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--mute); font-weight:500; font-size:11px; text-transform:uppercase; }
+  tr.new td { animation:flash 1.6s ease-out; }
+  @keyframes flash { from { background:#8b5cf633; } to { background:transparent; } }
+  .mono { font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+  .bar { height:10px; border-radius:6px; background:#1b2436; overflow:hidden; margin-top:8px; }
+  .bar > div { height:100%; background:linear-gradient(90deg,var(--pow),var(--pos)); transition:width .6s; }
+  input { background:#0d1320; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px 10px; width:100%; font-family:ui-monospace,Consolas,monospace; }
+  .log { font-family:ui-monospace,Consolas,monospace; font-size:11.5px; color:#9fb0c9; white-space:pre-wrap; max-height:260px; overflow:auto; }
+  .chainviz { display:flex; gap:8px; overflow:hidden; padding:6px 0 2px; }
+  .blk { min-width:62px; height:44px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; position:relative; }
+  .blk.pow { background:#f59e0b26; border:1px solid #f59e0b77; }
+  .blk.pos { background:#10b98126; border:1px solid #10b98177; }
+  .blk.genesis { background:#8b5cf626; border:1px solid #8b5cf677; color:#c4b5fd; }
+  .blk .tx { position:absolute; bottom:2px; right:5px; font-size:9px; color:var(--mute); font-weight:500; }
+  .err { color:#f87171; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"></div>
+  <div>
+    <h1>AuraChain Explorer</h1>
+    <div class="sub" id="net">connecting…</div>
+  </div>
+  <div style="flex:1"></div>
+  <span id="phase" class="pill pow">PoW</span>
+</header>
+<main>
+  <div class="cards">
+    <div class="card"><div class="k">Block height</div><div class="v" id="height">–</div></div>
+    <div class="card"><div class="k">Consensus (next block)</div><div class="v" id="cons">–</div></div>
+    <div class="card"><div class="k">Circulating AURA</div><div class="v" id="circ">–</div></div>
+    <div class="card"><div class="k">Burned (EIP-1559)</div><div class="v" id="burned">–</div></div>
+    <div class="card"><div class="k">Block reward</div><div class="v" id="reward">–</div></div>
+    <div class="card"><div class="k">Base fee</div><div class="v" id="basefee">–</div></div>
+    <div class="card"><div class="k">Total staked</div><div class="v" id="staked">–</div></div>
+    <div class="card"><div class="k">Difficulty / this node's hashrate</div><div class="v" id="diff">–</div></div>
+  </div>
+
+  <section>
+    <h2>Fair-launch progress: PoW bootstrap → Verified Proof-of-Stake at block <span id="posh"></span></h2>
+    <div class="bar"><div id="prog" style="width:0%"></div></div>
+    <div class="chainviz" id="viz"></div>
+  </section>
+
+  <div class="grid2">
+    <section>
+      <h2>Latest blocks</h2>
+      <table><thead><tr><th>#</th><th>Type</th><th>State root</th><th>Producer</th><th>Txs</th><th>Base fee</th><th>Age</th></tr></thead>
+      <tbody id="blocks"></tbody></table>
+    </section>
+    <div style="display:grid; gap:18px; align-content:start">
+      <section>
+        <h2>VPoS validators (lottery weight capped at ¼ of stake)</h2>
+        <table><thead><tr><th>Address</th><th>Stake</th><th>Weight</th></tr></thead><tbody id="vals"></tbody></table>
+      </section>
+      <section>
+        <h2>Account lookup</h2>
+        <input id="addr" placeholder="aura… address, press Enter">
+        <div id="acct" class="mono" style="margin-top:8px"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <section>
+      <h2>L2 "Metropolis" state roots anchored on L1</h2>
+      <table><thead><tr><th>L1 block</th><th>Sequencer</th><th>Commitment</th></tr></thead><tbody id="anchors"></tbody></table>
+    </section>
+    <section>
+      <h2>Node log</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </div>
+  <div class="sub mono" id="gen"></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const short = (s, n = 10) => s ? s.slice(0, n) + '…' : '–';
+const fmt = s => Number(s).toLocaleString(undefined, { maximumFractionDigits: 6 });
+let lastTip = -1, cache = [], lastAnchors = 0;
+
+async function j(p) { const r = await fetch(p); return r.json(); }
+
+async function tick() {
+  try {
+    const i = await j('/info');
+    $('net').textContent = `${i.network} · node ${i.self_url} · peers: ${i.peers.length ? i.peers.join(', ') : 'none'} · mempool ${i.mempool}`;
+    $('height').textContent = i.height.toLocaleString();
+    $('cons').textContent = i.next_consensus === 'pos' ? 'VPoS' : 'Proof-of-Work';
+    $('phase').textContent = i.next_consensus === 'pos' ? 'VPoS live' : 'PoW fair launch';
+    $('phase').className = 'pill ' + i.next_consensus;
+    $('circ').textContent = fmt(i.circulating);
+    $('burned').textContent = fmt(i.burned);
+    $('reward').textContent = fmt(i.block_reward);
+    $('basefee').textContent = i.base_fee;
+    $('staked').textContent = fmt(i.total_staked);
+    $('diff').textContent = `${(i.difficulty / 1e6).toFixed(1)}M · ${(i.hashrate / 1e6).toFixed(2)} MH/s`;
+    $('posh').textContent = i.pos_start_height;
+    $('prog').style.width = Math.min(100, 100 * i.height / i.pos_start_height) + '%';
+    $('gen').textContent = `genesis ${i.genesis_hash} — "${i.genesis_message}" · max supply ${fmt(i.max_supply)} AURA`;
+    $('vals').innerHTML = i.validators.length ? i.validators.map(v =>
+      `<tr><td class="mono">${short(v.address, 14)}</td><td>${fmt(v.stake)}</td><td>${fmt(v.weight)}</td></tr>`).join('')
+      : '<tr><td colspan="3" class="sub">nobody staking yet — chain stays on PoW</td></tr>';
+    $('log').textContent = i.log.join('\n');
+
+    if (i.height !== lastTip) {
+      // Incremental fetch: only blocks we haven't seen (keeps bandwidth tiny).
+      const from = lastTip < 0 ? Math.max(0, i.height - 19) : Math.max(lastTip + 1, i.height - 19);
+      const fresh = await j(`/blocks?from=${from}&limit=20`);
+      cache = cache.concat(fresh).filter((b, k, arr) => arr.findIndex(x => x.header.height === b.header.height) === k);
+      cache = cache.filter(b => b.header.height <= i.height).slice(-20);
+      const bs = cache.slice().reverse();
+      const now = Date.now() / 1000;
+      $('blocks').innerHTML = bs.map(b => {
+        const h = b.header;
+        return `<tr class="${h.height > lastTip && lastTip >= 0 ? 'new' : ''}"><td>${h.height}</td>
+          <td><span class="pill ${h.consensus === 'genesis' ? '' : h.consensus}">${h.consensus.toUpperCase()}</span></td>
+          <td class="mono">${short(h.prev_hash === '0'.repeat(64) ? 'genesis' : h.state_root, 12)}</td>
+          <td class="mono">${short(h.producer, 14)}</td><td>${b.txs.length}</td>
+          <td>${(h.base_fee / 1e6).toFixed(6)}</td><td>${Math.max(0, Math.round(now - h.timestamp))}s</td></tr>`;
+      }).join('');
+      $('viz').innerHTML = bs.slice(0, 14).reverse().map(b =>
+        `<div class="blk ${b.header.consensus}">#${b.header.height}<span class="tx">${b.txs.length}tx</span></div>`).join('');
+      if (Date.now() - lastAnchors > 30000) {
+        lastAnchors = Date.now();
+        const an = await j('/anchors');
+        $('anchors').innerHTML = an.length ? an.slice(0, 10).map(a =>
+          `<tr><td>${a.height}</td><td class="mono">${short(a.from, 14)}</td><td class="mono">${a.data.replace(/root=([0-9a-f]{16})[0-9a-f]+/, 'root=$1…')}</td></tr>`).join('')
+          : '<tr><td colspan="3" class="sub">no L2 batches anchored yet</td></tr>';
+      }
+      lastTip = i.height;
+    }
+  } catch (e) {
+    $('net').innerHTML = `<span class="err">node unreachable: ${e}</span>`;
+  }
+}
+$('addr').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const a = await j('/account/' + e.target.value.trim());
+  $('acct').innerHTML = `balance <b>${fmt(a.balance)}</b> AURA · staked ${fmt(a.stake)} · nonce ${a.nonce}`;
+});
+tick(); setInterval(() => { if (!document.hidden) tick(); }, 5000);
+</script>
+</body>
+</html>

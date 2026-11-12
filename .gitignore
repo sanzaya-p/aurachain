@@ -1,0 +1,9 @@
+# build output
+/target/
+/deploy/out/
+
+# NEVER commit wallets / validator keys or local chain data
+/devnet/
+*.key
+*-key.json
+wallet*.json
