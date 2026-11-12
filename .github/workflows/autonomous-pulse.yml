@@ -1,0 +1,36 @@
+name: AuraChain Quantum Autonomous Pulse & CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  schedule:
+    # Autonomous 24/7 Cloud Keeper: triggers VPoS slot + L2 Metropolis rollup settlement every 10 minutes ($0 on public repos)
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  quantum-pulse:
+    name: Autonomous VPoS & L2 Pulse
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger VPoS Slot & L2 Metropolis Batch Settlement
+        run: |
+          echo "Pinging AuraChain Quantum Cloud Validator (/pulse)..."
+          PULSE=$(curl -fsSL --retry 3 --max-time 25 "https://aurachain-quantum.vercel.app/pulse")
+          echo "Pulse response: $PULSE"
+          INFO=$(curl -fsSL --retry 3 --max-time 25 "https://aurachain-quantum.vercel.app/info")
+          echo "$INFO" | jq '{network, height, finalized_height, next_consensus, storage, circulating, total_staked, l2_batches_count}'
+
+  rust-verify:
+    name: Cryptographic Consensus & FIPS-204 Test Suite
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run Hybrid Post-Quantum & Consensus Unit Tests
+        run: cargo test --verbose
+      - name: Build Optimized Sovereign Node Binary
+        run: cargo build --release --locked

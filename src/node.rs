@@ -1,7 +1,7 @@
-//! Full node: chain storage, mempool, HTTP/JSON-RPC API, peer sync,
-//! PoW miner and VPoS block producer.
+//! Full P2P node: chain storage, mempool, HTTP/JSON API, peer sync,
+//! BFT finality fork-choice guard, SHA3-256 PoW miner, and VPoS validator.
 
-use crate::chain::{self, Block, State, Tx};
+use crate::chain::{self, Block, State, Tx, TxKind};
 use crate::crypto::Keypair;
 use serde_json::{json, Value};
 use std::io::Read;
@@ -25,7 +25,7 @@ pub struct Node {
 
 pub struct Ctx {
     pub node: Mutex<Node>,
-    pub tip: AtomicU64, // bumps on every chain change; lets the miner abort stale work
+    pub tip: AtomicU64,
     pub key: Option<Keypair>,
     pub hashrate: AtomicU64,
 }
@@ -84,9 +84,10 @@ impl Node {
         let ns = chain::apply_block(&self.state, &self.blocks, &b, chain::now_secs())?;
         let h = b.header.height;
         let what = format!(
-            "block #{h} {} by {}… ({} txs) {}",
+            "block #{h} {} (fin #{}) by {}… ({} txs) {}",
             b.header.consensus.to_uppercase(),
-            &b.header.producer[..12],
+            ns.finalized_height,
+            &b.header.producer[..14.min(b.header.producer.len())],
             b.txs.len(),
             &b.header.hash_hex()[..16]
         );
@@ -102,6 +103,14 @@ impl Node {
         if cand_state.chainwork <= self.state.chainwork {
             return false;
         }
+        // BFT Finality Guard: never reorg across an irreversibly finalized checkpoint!
+        let fin_h = self.state.finalized_height as usize;
+        if fin_h > 0 {
+            if cand.len() <= fin_h || cand[fin_h].header.hash_hex() != self.state.finalized_hash {
+                log(self, format!("rejected fork violating BFT finalized checkpoint #{fin_h}"));
+                return false;
+            }
+        }
         let old = self.blocks.len();
         let mut leftovers: Vec<Tx> = self.blocks.iter().flat_map(|b| b.txs.clone()).collect();
         leftovers.extend(self.mempool.drain(..));
@@ -110,7 +119,7 @@ impl Node {
         self.mempool = leftovers;
         self.prune_mempool();
         self.save();
-        let msg = format!("reorg/sync: switched to heavier chain (height {} -> {})", old - 1, self.blocks.len() - 1);
+        let msg = format!("sync/reorg: switched to heavier chain (height {} -> {})", old - 1, self.blocks.len() - 1);
         log(self, msg);
         true
     }
@@ -124,15 +133,15 @@ impl Node {
         if tx.nonce < self.state.account(&from).nonce {
             return Err("nonce already used".into());
         }
-        if tx.fee < chain::MIN_BASE_FEE {
+        if tx.kind != TxKind::PowMine && tx.fee < chain::MIN_BASE_FEE {
             return Err("fee below minimum base fee".into());
         }
         if self.mempool.len() >= 5000 {
             return Err("mempool full".into());
         }
-        // Admission check: replay this sender's pending txs, then this one, on a
-        // scratch copy of the state. Rejects overspends and nonce gaps up front.
+        let next_h = self.blocks.last().unwrap().header.height + 1;
         let mut sim = self.state.clone();
+        sim.recent_hashes.insert(next_h - 1, self.blocks.last().unwrap().header.hash_hex());
         let mut pending: Vec<&Tx> = self
             .mempool
             .iter()
@@ -140,11 +149,11 @@ impl Node {
             .collect();
         pending.sort_by_key(|t| t.nonce);
         for t in pending {
-            let _ = chain::apply_tx(&mut sim, t, chain::MIN_BASE_FEE);
+            let _ = chain::apply_tx(&mut sim, t, chain::MIN_BASE_FEE, next_h);
         }
-        chain::apply_tx(&mut sim, &tx, chain::MIN_BASE_FEE)?;
+        chain::apply_tx(&mut sim, &tx, chain::MIN_BASE_FEE, next_h)?;
         let id = tx.id();
-        log(self, format!("mempool += {:?} {} from {}…", tx.kind, &id[..12], &from[..12]));
+        log(self, format!("mempool += {} {} from {}…", tx.kind.as_str(), &id[..12], &from[..14]));
         self.mempool.push(tx);
         Ok(id)
     }
@@ -164,7 +173,7 @@ impl Node {
 // ------------------------------------------------------------------ networking
 fn post_json(url: &str, body: &Value) -> Result<Value, String> {
     ureq::post(url)
-        .timeout(Duration::from_secs(3))
+        .timeout(Duration::from_secs(6))
         .send_json(body.clone())
         .map_err(|e| e.to_string())?
         .into_json::<Value>()
@@ -173,7 +182,7 @@ fn post_json(url: &str, body: &Value) -> Result<Value, String> {
 
 fn get_json(url: &str) -> Result<Value, String> {
     ureq::get(url)
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(12))
         .call()
         .map_err(|e| e.to_string())?
         .into_json::<Value>()
@@ -189,12 +198,9 @@ fn broadcast(peers: Vec<String>, path: &'static str, body: Value) {
 }
 
 fn sync_loop(ctx: Arc<Ctx>) {
-    // Bandwidth-frugal sync: poll a ~100-byte /tip; when a peer has more work,
-    // fetch only the last few blocks and splice them onto our chain. Fall back
-    // to a full download only for deep forks.
     let mut round: u64 = 0;
     loop {
-        thread::sleep(Duration::from_secs(3));
+        thread::sleep(Duration::from_secs(4));
         round += 1;
         let (peers, my_work, my_height, self_url) = {
             let n = ctx.node.lock().unwrap();
@@ -206,7 +212,6 @@ fn sync_loop(ctx: Arc<Ctx>) {
                 Err(_) => continue,
             };
             if round % 20 == 1 {
-                // Re-announce ourselves occasionally (bidirectional gossip).
                 let _ = post_json(&format!("{p}/peers"), &json!({ "url": self_url }));
             }
             let their: u128 = tip["chainwork"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0);
@@ -229,9 +234,28 @@ fn sync_loop(ctx: Arc<Ctx>) {
                 }
             }
             if cand.is_none() {
-                cand = get_json(&format!("{p}/blocks?from=0&limit=1000000"))
-                    .and_then(|v| serde_json::from_value(v).map_err(|e| e.to_string()))
-                    .ok();
+                // Chunked full sync from genesis so peers can sync arbitrarily long chains cleanly.
+                let mut full: Vec<Block> = vec![];
+                let mut cur = 0u64;
+                let target_h = tip["height"].as_u64().unwrap_or(0);
+                let mut ok_all = true;
+                while cur <= target_h {
+                    match get_json(&format!("{p}/blocks?from={cur}&limit=200"))
+                        .and_then(|v| serde_json::from_value::<Vec<Block>>(v).map_err(|e| e.to_string()))
+                    {
+                        Ok(chunk) if !chunk.is_empty() => {
+                            cur = chunk.last().unwrap().header.height + 1;
+                            full.extend(chunk);
+                        }
+                        _ => {
+                            ok_all = false;
+                            break;
+                        }
+                    }
+                }
+                if ok_all && !full.is_empty() {
+                    cand = Some(full);
+                }
             }
             let Some(cand) = cand else { continue };
             match chain::validate_chain(&cand) {
@@ -267,7 +291,7 @@ fn miner_loop(ctx: Arc<Ctx>) {
             if chain::is_pos(next, &n.state) {
                 None
             } else {
-                chain::assemble(&n.blocks, &n.state, &n.mempool, key, chain::now_secs(), "mined on AuraChain devnet").ok()
+                chain::assemble(&n.blocks, &n.state, &n.mempool, key, chain::now_secs(), "mined on AuraChain Quantum").ok()
             }
         };
         let Some(mut block) = tmpl else {
@@ -292,7 +316,6 @@ fn miner_loop(ctx: Arc<Ctx>) {
             if el > 0.5 {
                 ctx.hashrate.store((tried as f64 / el) as u64, Ordering::Relaxed);
             }
-            // Abandon stale work when the tip changes or the template is old.
             if ctx.tip.load(Ordering::SeqCst) != tip_ver || el > 15.0 {
                 break;
             }
@@ -306,7 +329,7 @@ fn miner_loop(ctx: Arc<Ctx>) {
                     ctx.tip.fetch_add(1, Ordering::SeqCst);
                     announce(&ctx, &block);
                 }
-                Err(e) => log(&mut n, format!("mined block discarded (stale or invalid): {e}")),
+                Err(e) => log(&mut n, format!("mined block discarded: {e}")),
             }
         }
     }
@@ -316,7 +339,7 @@ fn validator_loop(ctx: Arc<Ctx>) {
     let key = ctx.key.as_ref().unwrap();
     let me = key.address();
     loop {
-        thread::sleep(Duration::from_millis(400));
+        thread::sleep(Duration::from_millis(500));
         let produced = {
             let mut n = ctx.node.lock().unwrap();
             let prev = n.blocks.last().unwrap().header.clone();
@@ -329,7 +352,7 @@ fn validator_loop(ctx: Arc<Ctx>) {
             if chain::elect_leader(&n.state, &prev.hash_hex(), next, slot).as_deref() != Some(me.as_str()) {
                 continue;
             }
-            match chain::assemble(&n.blocks, &n.state, &n.mempool, key, now, "VPoS slot leader") {
+            match chain::assemble(&n.blocks, &n.state, &n.mempool, key, now, "VPoS Quantum Slot Leader") {
                 Ok(b) => match n.try_extend(b.clone()) {
                     Ok(()) => Some(b),
                     Err(e) => {
@@ -359,10 +382,14 @@ fn info_json(ctx: &Ctx, n: &Node) -> Value {
         .map(|(a, st, w)| json!({"address": a, "stake": chain::fmt_aura(st), "weight": chain::fmt_aura(w)}))
         .collect();
     json!({
+        "version": env!("CARGO_PKG_VERSION"),
         "network": chain::NETWORK,
+        "crypto_suite": "Hybrid Ed25519 + NIST FIPS 204 ML-DSA-44 + SHA3-256",
         "height": tip.height,
         "tip_hash": tip.hash_hex(),
         "tip_timestamp": tip.timestamp,
+        "finalized_height": s.finalized_height,
+        "finalized_hash": s.finalized_hash,
         "genesis_hash": n.blocks[0].header.hash_hex(),
         "genesis_message": chain::GENESIS_MESSAGE,
         "next_consensus": if chain::is_pos(next, s) { "pos" } else { "pow" },
@@ -370,9 +397,11 @@ fn info_json(ctx: &Ctx, n: &Node) -> Value {
         "chainwork": s.chainwork.to_string(),
         "difficulty": (u128::MAX / target.max(1)) as f64,
         "target": chain::target_hex(target),
+        "pow_claim_target": chain::target_hex(s.pow_claim_target),
+        "pow_claim_reward": chain::fmt_aura(chain::POW_CLAIM_REWARD),
         "minted": chain::fmt_aura(s.minted),
         "burned": chain::fmt_aura(s.burned),
-        "circulating": chain::fmt_aura(s.minted - s.burned),
+        "circulating": chain::fmt_aura(s.minted.saturating_sub(s.burned)),
         "max_supply": chain::fmt_aura(chain::MAX_SUPPLY),
         "block_reward": chain::fmt_aura(chain::block_reward(next, s.minted)),
         "base_fee": chain::fmt_aura(s.next_base_fee),
@@ -380,12 +409,87 @@ fn info_json(ctx: &Ctx, n: &Node) -> Value {
         "total_staked": chain::fmt_aura(s.total_stake()),
         "validators": vals,
         "accounts": s.accounts.len(),
+        "proposals_count": s.proposals.len(),
+        "tokens_count": s.tokens.len(),
+        "nfts_count": s.nfts.len(),
+        "l2_batches_count": s.l2_batches.len(),
+        "slashed_count": s.slashed.len(),
         "mempool": n.mempool.len(),
         "peers": n.peers,
         "self_url": n.self_url,
         "node_address": ctx.key.as_ref().map(|k| k.address()),
         "hashrate": ctx.hashrate.load(Ordering::Relaxed),
-        "log": n.log.iter().rev().take(8).collect::<Vec<_>>(),
+        "log": n.log.iter().rev().take(10).collect::<Vec<_>>(),
+    })
+}
+
+fn ecosystem_json(s: &State, height: u64) -> Value {
+    let proposals: Vec<Value> = s
+        .proposals
+        .values()
+        .rev()
+        .map(|p| {
+            let status = if height <= p.end_height {
+                "active"
+            } else if p.aye_stake > p.nay_stake && p.aye_stake > 0 {
+                "passed"
+            } else {
+                "rejected"
+            };
+            json!({
+                "id": p.id,
+                "proposer": p.proposer,
+                "title": p.title,
+                "summary": p.summary,
+                "created_height": p.created_height,
+                "end_height": p.end_height,
+                "aye_aura": chain::fmt_aura(p.aye_stake),
+                "nay_aura": chain::fmt_aura(p.nay_stake),
+                "voters_count": p.voters.len(),
+                "status": status,
+            })
+        })
+        .collect();
+    let tokens: Vec<Value> = s
+        .tokens
+        .values()
+        .map(|t| {
+            json!({
+                "symbol": t.symbol,
+                "name": t.name,
+                "creator": t.creator,
+                "aura_reserve": chain::fmt_aura(t.aura_reserve),
+                "token_reserve": chain::fmt_aura(t.token_reserve),
+                "spot_price_aura": chain::fmt_aura(t.spot_price_micro()),
+                "holders": t.balances.values().filter(|&&b| b > 0).count(),
+                "trades": t.trades,
+            })
+        })
+        .collect();
+    let nfts: Vec<Value> = s
+        .nfts
+        .values()
+        .rev()
+        .map(|nft| {
+            json!({
+                "id": nft.id,
+                "name": nft.name,
+                "uri": nft.uri,
+                "creator": nft.creator,
+                "owner": nft.owner,
+                "royalty_bps": nft.royalty_bps,
+                "price_aura": if nft.price_micro > 0 { Some(chain::fmt_aura(nft.price_micro)) } else { None },
+                "price_micro": nft.price_micro,
+                "sales": nft.sales,
+            })
+        })
+        .collect();
+    json!({
+        "proposals": proposals,
+        "tokens": tokens,
+        "nfts": nfts,
+        "l2_batches": s.l2_batches.iter().rev().take(25).collect::<Vec<_>>(),
+        "slashes": s.slash_history,
     })
 }
 
@@ -393,7 +497,9 @@ fn respond(req: tiny_http::Request, code: u16, body: String, ctype: &str) {
     let resp = tiny_http::Response::from_string(body)
         .with_status_code(code)
         .with_header(tiny_http::Header::from_bytes("Content-Type", ctype).unwrap())
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap());
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Headers", "Content-Type").unwrap())
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Methods", "GET, POST, OPTIONS").unwrap());
     let _ = req.respond(resp);
 }
 
@@ -404,6 +510,9 @@ fn handle(ctx: &Arc<Ctx>, mut req: tiny_http::Request) {
         query.split('&').find_map(|kv| kv.split_once('=').filter(|(a, _)| *a == k).and_then(|(_, v)| v.parse().ok()))
     };
     let method = req.method().clone();
+    if method == tiny_http::Method::Options {
+        return respond(req, 204, String::new(), "text/plain");
+    }
     let remote_is_loopback = req.remote_addr().map(|a| a.ip().is_loopback()).unwrap_or(false);
     let mut body = String::new();
     if method == tiny_http::Method::Post {
@@ -412,24 +521,34 @@ fn handle(ctx: &Arc<Ctx>, mut req: tiny_http::Request) {
     let ok = |v: Value| (200u16, v);
     let err = |c: u16, e: String| (c, json!({ "error": e }));
 
-    if method == tiny_http::Method::Get && path == "/" {
+    if method == tiny_http::Method::Get && (path == "/" || path == "/index.html") {
         return respond(req, 200, EXPLORER_HTML.to_string(), "text/html; charset=utf-8");
     }
 
     let (code, out): (u16, Value) = match (method.as_str(), path) {
-        ("GET", "/tip") => {
+        ("GET", "/tip") | ("GET", "/pulse") => {
             let n = ctx.node.lock().unwrap();
             let t = &n.blocks.last().unwrap().header;
-            ok(json!({"height": t.height, "hash": t.hash_hex(), "chainwork": n.state.chainwork.to_string()}))
+            ok(json!({
+                "height": t.height,
+                "hash": t.hash_hex(),
+                "finalized_height": n.state.finalized_height,
+                "chainwork": n.state.chainwork.to_string()
+            }))
         }
         ("GET", "/info") => {
             let n = ctx.node.lock().unwrap();
             ok(info_json(ctx, &n))
         }
+        ("GET", "/ecosystem") => {
+            let n = ctx.node.lock().unwrap();
+            let h = n.blocks.last().unwrap().header.height;
+            ok(ecosystem_json(&n.state, h))
+        }
         ("GET", "/blocks") => {
             let n = ctx.node.lock().unwrap();
             let from = q("from").unwrap_or(0) as usize;
-            let limit = q("limit").unwrap_or(50) as usize;
+            let limit = q("limit").unwrap_or(50).min(500) as usize;
             let slice: Vec<&Block> = n.blocks.iter().skip(from).take(limit).collect();
             ok(serde_json::to_value(slice).unwrap())
         }
@@ -444,13 +563,64 @@ fn handle(ctx: &Arc<Ctx>, mut req: tiny_http::Request) {
                 None => err(404, "no such block".into()),
             }
         }
+        ("GET", p) if p.starts_with("/proof/") => {
+            let parts: Vec<&str> = p[7..].split('/').collect();
+            if parts.len() != 2 {
+                err(400, "usage: /proof/<height>/<tx_index>".into())
+            } else {
+                let n = ctx.node.lock().unwrap();
+                let h = parts[0].parse::<usize>().ok();
+                let idx = parts[1].parse::<usize>().ok();
+                match (h.and_then(|x| n.blocks.get(x)), idx) {
+                    (Some(b), Some(i)) if i < b.txs.len() => {
+                        let steps = chain::merkle_proof(&b.txs, i).unwrap_or_default();
+                        let tx_id = b.txs[i].id();
+                        let verified = chain::verify_merkle_proof(&tx_id, &steps, &b.header.tx_root);
+                        ok(json!({
+                            "height": b.header.height,
+                            "block_hash": b.header.hash_hex(),
+                            "tx_index": i,
+                            "tx_id": tx_id,
+                            "tx_root": b.header.tx_root,
+                            "steps": steps,
+                            "verified": verified,
+                        }))
+                    }
+                    _ => err(404, "block or tx index not found".into()),
+                }
+            }
+        }
         ("GET", p) if p.starts_with("/account/") => {
             let n = ctx.node.lock().unwrap();
             let a = &p[9..];
             let acc = n.state.account(a);
+            let tok_bals: serde_json::Map<String, Value> = n
+                .state
+                .tokens
+                .iter()
+                .filter_map(|(sym, pool)| {
+                    let b = pool.balances.get(a).copied().unwrap_or(0);
+                    if b > 0 {
+                        Some((sym.clone(), json!({"balance": chain::fmt_aura(b), "micro": b})))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let nfts_owned: Vec<u64> =
+                n.state.nfts.values().filter(|nft| nft.owner == a).map(|nft| nft.id).collect();
             ok(json!({
-                "address": a, "balance": chain::fmt_aura(acc.balance), "balance_micro": acc.balance,
-                "stake": chain::fmt_aura(acc.stake), "nonce": acc.nonce, "next_nonce": n.next_nonce(a),
+                "address": a,
+                "balance": chain::fmt_aura(acc.balance),
+                "balance_micro": acc.balance,
+                "stake": chain::fmt_aura(acc.stake),
+                "stake_micro": acc.stake,
+                "delegate": acc.delegate,
+                "unbonding": acc.unbonding,
+                "token_balances": tok_bals,
+                "nfts_owned": nfts_owned,
+                "nonce": acc.nonce,
+                "next_nonce": n.next_nonce(a),
             }))
         }
         ("GET", "/mempool") => {
@@ -460,15 +630,13 @@ fn handle(ctx: &Arc<Ctx>, mut req: tiny_http::Request) {
         ("GET", "/anchors") => {
             let n = ctx.node.lock().unwrap();
             let v: Vec<Value> = n
-                .blocks
+                .state
+                .l2_batches
                 .iter()
-                .flat_map(|b| {
-                    b.txs.iter().filter(|t| t.kind == chain::TxKind::Anchor).map(move |t| {
-                        json!({"height": b.header.height, "from": t.sender().unwrap_or_default(), "data": t.data})
-                    })
-                })
+                .rev()
+                .map(|b| json!({"height": b.l1_height, "from": b.sequencer, "data": b.commitment, "batch_index": b.batch_index}))
                 .collect();
-            ok(json!(v.into_iter().rev().take(50).collect::<Vec<_>>()))
+            ok(json!(v))
         }
         ("POST", "/tx") => match serde_json::from_str::<Tx>(&body) {
             Ok(tx) => {
@@ -504,7 +672,6 @@ fn handle(ctx: &Arc<Ctx>, mut req: tiny_http::Request) {
                 Some(u) if u.starts_with("http") => {
                     let mut n = ctx.node.lock().unwrap();
                     let u = u.trim_end_matches('/').to_string();
-                    // A remote machine's "127.0.0.1" would point back at *us*; ignore it.
                     let loopback_url = u.contains("://127.") || u.contains("://localhost");
                     if loopback_url && !remote_is_loopback {
                         ok(json!({"peers": n.peers, "note": "loopback peer url ignored"}))
@@ -528,12 +695,13 @@ pub fn run(port: u16, data_dir: PathBuf, key: Option<Keypair>, mine: bool, peers
     let self_url = format!("http://{public_host}:{port}");
     let mut node = Node::load(data_dir, self_url.clone());
     node.peers = peers.into_iter().map(|p| p.trim_end_matches('/').to_string()).collect();
-    println!("AuraChain node v{} | network {}", env!("CARGO_PKG_VERSION"), chain::NETWORK);
+    println!("AuraChain Quantum v{} | network {}", env!("CARGO_PKG_VERSION"), chain::NETWORK);
+    println!("  crypto   Hybrid Ed25519 + NIST FIPS 204 ML-DSA-44 + SHA3-256");
     println!("  genesis  {}", node.blocks[0].header.hash_hex());
-    println!("  height   {}", node.blocks.len() - 1);
-    println!("  api      {self_url}   (explorer: open it in a browser)");
+    println!("  height   {} (BFT finalized #{})", node.blocks.len() - 1, node.state.finalized_height);
+    println!("  api      {self_url}   (explorer & quantum wallet: open in browser)");
     if let Some(k) = &key {
-        println!("  identity {}  (mining: {mine}, VPoS validator: yes)", k.address());
+        println!("  identity {}  (PoW miner: {mine}, VPoS validator: yes)", k.address());
     }
     let ctx = Arc::new(Ctx { node: Mutex::new(node), tip: AtomicU64::new(0), key, hashrate: AtomicU64::new(0) });
 

@@ -1,0 +1,10 @@
+/target/
+.vercel
+.env*
+# generated copies (vercel/deploy.ps1 syncs them from ../src and ../seed)
+/src/chain.rs
+/src/crypto.rs
+/src/explorer.html
+/seed/
+
+.env*

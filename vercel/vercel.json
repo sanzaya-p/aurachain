@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "schedules": {
+    "aura-quantum-pulse": {
+      "schedule": "*/15 * * * *",
+      "path": "/pulse",
+      "requestMethod": "GET"
+    }
+  }
+}

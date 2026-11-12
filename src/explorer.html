@@ -3,172 +3,1028 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AuraChain Explorer</title>
+<title>AuraChain Quantum v1.0 — Post-Quantum L1, Wallet, Miner, DEX & DAO</title>
+<meta name="description" content="AuraChain Quantum v1.0: Autonomous Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256) Fair-Launch PoW to VPoS Layer-1 Blockchain with BFT Finality, Browser PoW Mining, AuraLaunch DEX, Royalty NFTs, DAO & L2 Rollup.">
+<meta property="og:title" content="AuraChain Quantum v1.0 — Live Post-Quantum Blockchain">
+<meta property="og:description" content="NIST FIPS 204 ML-DSA-44 + Ed25519 Hybrid Signatures · 0% Pre-Mine Fair Launch · Browser SHA3-256 Mining · BFT Finality · Live DEX, NFTs & DAO.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <style>
-  :root { --bg:#0b0f17; --panel:#121927; --line:#1f2a3d; --txt:#dce3ee; --mute:#7d8aa3; --aura:#8b5cf6; --pow:#f59e0b; --pos:#10b981; --l2:#38bdf8; }
+  :root {
+    --bg:#070a12; --bg2:#0d1322; --panel:#11182b; --panel2:#162038;
+    --line:#22304f; --txt:#e5ecff; --mute:#8b9bb8;
+    --aura:#8b5cf6; --cyan:#22d3ee; --pos:#10b981; --pow:#f59e0b; --danger:#f43f5e;
+  }
   * { box-sizing:border-box; }
-  body { margin:0; font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
-  header { padding:18px 28px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-  .logo { width:34px; height:34px; border-radius:50%; background:conic-gradient(var(--aura),var(--l2),var(--pos),var(--aura)); box-shadow:0 0 24px #8b5cf655; }
-  h1 { font-size:20px; margin:0; letter-spacing:.3px; }
+  body {
+    margin:0; font:14px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    background:radial-gradient(1200px 500px at 15% -10%, #8b5cf620, transparent),
+               radial-gradient(900px 400px at 85% -5%, #22d3ee18, transparent), var(--bg);
+    color:var(--txt); min-height:100vh;
+  }
+  header {
+    padding:16px 26px; border-bottom:1px solid var(--line); background:#0a0f1dcc;
+    backdrop-filter:blur(12px); position:sticky; top:0; z-index:20;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  .logo {
+    width:38px; height:38px; border-radius:11px;
+    background:conic-gradient(from 120deg, var(--aura), var(--cyan), var(--pos), var(--aura));
+    box-shadow:0 0 26px #8b5cf666; display:grid; place-items:center; font-weight:900; color:#fff;
+  }
+  h1 { font-size:18px; margin:0; letter-spacing:.2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .badge-pq {
+    font-size:10.5px; padding:2px 8px; border-radius:999px;
+    background:#22d3ee1c; color:var(--cyan); border:1px solid #22d3ee55; font-weight:600;
+  }
   .sub { color:var(--mute); font-size:12px; }
-  .pill { padding:3px 10px; border-radius:999px; font-weight:600; font-size:12px; }
-  .pow { background:#f59e0b22; color:var(--pow); border:1px solid #f59e0b55; }
-  .pos { background:#10b98122; color:var(--pos); border:1px solid #10b98155; }
-  main { padding:22px 28px; display:grid; gap:18px; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .pill { padding:4px 11px; border-radius:999px; font-weight:650; font-size:11.5px; display:inline-flex; align-items:center; gap:5px; }
+  .pow { background:#f59e0b20; color:var(--pow); border:1px solid #f59e0b55; }
+  .pos { background:#10b98120; color:var(--pos); border:1px solid #10b98155; }
+  .fin { background:#8b5cf620; color:#c4b5fd; border:1px solid #8b5cf655; }
+
+  nav.tabs {
+    display:flex; gap:6px; padding:12px 26px 0; border-bottom:1px solid var(--line);
+    overflow-x:auto; background:#090d19;
+  }
+  nav.tabs button {
+    background:transparent; color:var(--mute); border:none; border-bottom:2px solid transparent;
+    padding:10px 15px; font:600 13px inherit; cursor:pointer; white-space:nowrap; transition:.15s;
+  }
+  nav.tabs button:hover { color:var(--txt); }
+  nav.tabs button.active { color:#fff; border-bottom-color:var(--cyan); background:#22d3ee0c; border-radius:8px 8px 0 0; }
+
+  main { max-width:1380px; margin:0 auto; padding:22px 26px 60px; }
+  .tabpane { display:none; gap:18px; }
+  .tabpane.active { display:grid; }
+
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:12px; }
+  .card {
+    background:linear-gradient(180deg, var(--panel), #0e1526);
+    border:1px solid var(--line); border-radius:12px; padding:13px 15px;
+  }
   .card .k { color:var(--mute); font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
-  .card .v { font-size:19px; font-weight:650; margin-top:4px; word-break:break-all; }
-  .grid2 { display:grid; grid-template-columns:2fr 1fr; gap:18px; }
-  @media (max-width:1000px){ .grid2 { grid-template-columns:1fr; } }
-  section { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; overflow:auto; }
-  h2 { font-size:14px; margin:0 0 10px; color:#b9c4d8; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
-  th { color:var(--mute); font-weight:500; font-size:11px; text-transform:uppercase; }
-  tr.new td { animation:flash 1.6s ease-out; }
-  @keyframes flash { from { background:#8b5cf633; } to { background:transparent; } }
-  .mono { font-family:ui-monospace,Consolas,monospace; font-size:12px; }
-  .bar { height:10px; border-radius:6px; background:#1b2436; overflow:hidden; margin-top:8px; }
-  .bar > div { height:100%; background:linear-gradient(90deg,var(--pow),var(--pos)); transition:width .6s; }
-  input { background:#0d1320; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px 10px; width:100%; font-family:ui-monospace,Consolas,monospace; }
-  .log { font-family:ui-monospace,Consolas,monospace; font-size:11.5px; color:#9fb0c9; white-space:pre-wrap; max-height:260px; overflow:auto; }
-  .chainviz { display:flex; gap:8px; overflow:hidden; padding:6px 0 2px; }
-  .blk { min-width:62px; height:44px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; position:relative; }
-  .blk.pow { background:#f59e0b26; border:1px solid #f59e0b77; }
-  .blk.pos { background:#10b98126; border:1px solid #10b98177; }
-  .blk.genesis { background:#8b5cf626; border:1px solid #8b5cf677; color:#c4b5fd; }
-  .blk .tx { position:absolute; bottom:2px; right:5px; font-size:9px; color:var(--mute); font-weight:500; }
-  .err { color:#f87171; }
+  .card .v { font-size:19px; font-weight:700; margin-top:4px; word-break:break-word; }
+  .card .s { font-size:11px; color:var(--mute); margin-top:3px; }
+
+  .grid2 { display:grid; grid-template-columns:1.6fr 1fr; gap:18px; }
+  .grid-eq { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width:980px){ .grid2, .grid-eq { grid-template-columns:1fr; } }
+
+  section {
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:16px 18px; overflow:auto;
+  }
+  h2 { font-size:14.5px; margin:0 0 12px; color:#d2def7; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  h3 { font-size:13px; margin:12px 0 6px; color:#b9c8e8; }
+
+  table { width:100%; border-collapse:collapse; font-size:12.8px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid #1b2742; white-space:nowrap; }
+  th { color:var(--mute); font-weight:600; font-size:11px; text-transform:uppercase; }
+  tr.clickable { cursor:pointer; }
+  tr.clickable:hover td { background:#182440; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px; }
+
+  input, textarea, select {
+    background:#090e1b; color:var(--txt); border:1px solid var(--line); border-radius:9px;
+    padding:9px 11px; width:100%; font:13px inherit; outline:none;
+  }
+  input:focus, textarea:focus, select:focus { border-color:var(--cyan); }
+  label { display:block; font-size:11.5px; color:var(--mute); margin:8px 0 4px; font-weight:500; }
+
+  .btn {
+    background:linear-gradient(135deg, var(--aura), #6d28d9); color:#fff; border:none;
+    border-radius:9px; padding:9px 15px; font:600 13px inherit; cursor:pointer; transition:.15s;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; text-decoration:none;
+  }
+  .btn:hover { filter:brightness(1.12); transform:translateY(-1px); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+  .btn.cyan { background:linear-gradient(135deg, #0891b2, #0284c7); }
+  .btn.green { background:linear-gradient(135deg, #059669, #0d9488); }
+  .btn.amber { background:linear-gradient(135deg, #d97706, #ea580c); }
+  .btn.ghost { background:#17223b; border:1px solid var(--line); color:var(--txt); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
+  .chainviz { display:flex; gap:8px; overflow-x:auto; padding:6px 0 4px; }
+  .blk {
+    min-width:68px; height:46px; border-radius:9px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; font-weight:700; font-size:12px; cursor:pointer;
+  }
+  .blk.pow { background:#f59e0b22; border:1px solid #f59e0b77; color:#fcd34d; }
+  .blk.pos { background:#10b98122; border:1px solid #10b98177; color:#6ee7b7; }
+  .blk.genesis { background:#8b5cf622; border:1px solid #8b5cf677; color:#ddd6fe; }
+  .blk span { font-size:9.5px; color:var(--mute); font-weight:500; }
+
+  .bar { height:9px; border-radius:6px; background:#19233a; overflow:hidden; margin-top:6px; }
+  .bar > div { height:100%; background:linear-gradient(90deg, var(--aura), var(--cyan), var(--pos)); transition:width .5s; }
+
+  .toast {
+    padding:10px 13px; border-radius:9px; font-size:12.5px; margin-top:10px;
+    background:#0d1a2f; border:1px solid #22d3ee55; word-break:break-word;
+  }
+  .toast.err { border-color:#f43f5e77; color:#fda4af; background:#290d18; }
+  .toast.ok { border-color:#10b98177; color:#a7f3d0; background:#09261e; }
+  .log {
+    font-family:ui-monospace,Consolas,monospace; font-size:11.5px; color:#9cb0d1;
+    white-space:pre-wrap; max-height:240px; overflow:auto; background:#090e1a;
+    padding:10px; border-radius:9px; border:1px solid #1a2642;
+  }
+  .nft-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+  .nft-card {
+    background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:12px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .nft-art {
+    height:110px; border-radius:8px; display:grid; place-items:center; font-weight:800;
+    background:linear-gradient(135deg, #311068, #0b3b59, #093d2e); border:1px solid #ffffff18;
+    font-size:13px; text-align:center; padding:8px; color:#e0f2fe;
+  }
+  .wallet-pill {
+    background:#141e36; border:1px solid var(--line); border-radius:999px;
+    padding:5px 12px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:7px;
+    color:var(--txt);
+  }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--pos); box-shadow:0 0 8px var(--pos); }
+  pre.code {
+    background:#080c17; border:1px solid var(--line); border-radius:10px; padding:12px;
+    overflow-x:auto; font:12px/1.5 ui-monospace,Consolas,monospace; color:#c7d7f4;
+  }
 </style>
 </head>
 <body>
 <header>
-  <div class="logo"></div>
+  <div class="logo">AQ</div>
   <div>
-    <h1>AuraChain Explorer</h1>
-    <div class="sub" id="net">connecting…</div>
+    <h1>AuraChain Quantum <span class="badge-pq">NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256</span></h1>
+    <div class="sub" id="net">connecting to quantum settlement layer…</div>
   </div>
   <div style="flex:1"></div>
-  <span id="phase" class="pill pow">PoW</span>
+  <span id="fin-pill" class="pill fin">🔒 Finalized #0</span>
+  <span id="phase" class="pill pos">VPoS Live</span>
+  <button type="button" class="wallet-pill" data-tab="wallet" title="Open Non-Custodial Quantum Wallet">
+    <span class="dot"></span>
+    <span id="hdr-wallet" class="mono">initializing PQ keys…</span>
+  </button>
 </header>
+
+<nav class="tabs">
+  <button type="button" class="active" data-tab="explorer">⛓️ Explorer & Finality</button>
+  <button type="button" data-tab="wallet">🔐 Quantum Wallet & Staking</button>
+  <button type="button" data-tab="miner">⛏️ Browser SHA3 Miner</button>
+  <button type="button" data-tab="dex">🚀 Token DEX & Royalty NFTs</button>
+  <button type="button" data-tab="dao">🏛️ DAO & L2 Metropolis</button>
+  <button type="button" data-tab="docs">📜 Whitepaper & Share</button>
+</nav>
+
 <main>
-  <div class="cards">
-    <div class="card"><div class="k">Block height</div><div class="v" id="height">–</div></div>
-    <div class="card"><div class="k">Consensus (next block)</div><div class="v" id="cons">–</div></div>
-    <div class="card"><div class="k">Circulating AURA</div><div class="v" id="circ">–</div></div>
-    <div class="card"><div class="k">Burned (EIP-1559)</div><div class="v" id="burned">–</div></div>
-    <div class="card"><div class="k">Block reward</div><div class="v" id="reward">–</div></div>
-    <div class="card"><div class="k">Base fee</div><div class="v" id="basefee">–</div></div>
-    <div class="card"><div class="k">Total staked</div><div class="v" id="staked">–</div></div>
-    <div class="card"><div class="k">Difficulty / this node's hashrate</div><div class="v" id="diff">–</div></div>
+  <!-- ==================== TAB 1: EXPLORER ==================== -->
+  <div id="tab-explorer" class="tabpane active">
+    <div class="cards">
+      <div class="card"><div class="k">Block Height</div><div class="v" id="height">–</div><div class="s" id="bft-sub">BFT Finalized #–</div></div>
+      <div class="card"><div class="k">Consensus Mode</div><div class="v" id="cons">–</div><div class="s">Ouroboros VPoS + Casper BFT</div></div>
+      <div class="card"><div class="k">Circulating AURA</div><div class="v" id="circ">–</div><div class="s">Hard Cap: 10,000,000,000</div></div>
+      <div class="card"><div class="k">Burned (EIP-1559)</div><div class="v" id="burned">–</div><div class="s" id="basefee-sub">Base fee: –</div></div>
+      <div class="card"><div class="k">Total Staked</div><div class="v" id="staked">–</div><div class="s">25% Pool Saturation Cap</div></div>
+      <div class="card"><div class="k">Block / PoW Reward</div><div class="v" id="reward">–</div><div class="s" id="powrew-sub">Browser PoW share: 50 AURA</div></div>
+      <div class="card"><div class="k">On-Chain Ecosystem</div><div class="v" id="eco-counts">–</div><div class="s">Tokens · NFTs · AIPs · L2</div></div>
+      <div class="card"><div class="k">Quantum Suite</div><div class="v" style="font-size:14px;color:var(--cyan)">ML-DSA-44 + Ed25519</div><div class="s">SHA3-256 State & Merkle Trees</div></div>
+    </div>
+
+    <section>
+      <h2>
+        <span>Chain Stream (Fair-Launch PoW Bootstrap → Verified Proof-of-Stake at Block #<span id="posh">20</span>)</span>
+        <button type="button" class="btn ghost" style="padding:5px 11px;font-size:11.5px" data-action="pulse">⚡ Pulse Slot / L2 Anchor</button>
+      </h2>
+      <div class="bar"><div id="prog" style="width:100%"></div></div>
+      <div class="chainviz" id="viz"></div>
+    </section>
+
+    <div class="grid2">
+      <section>
+        <h2>
+          <span>Recent Blocks & SHA3-256 Merkle Proof Verifier</span>
+          <span class="row">
+            <input id="blk-q" type="number" min="0" value="19" style="width:92px;padding:5px 8px" aria-label="Block height to inspect">
+            <button type="button" class="btn cyan" style="padding:5px 11px;font-size:12px" data-action="inspect-input-block">Inspect Block #</button>
+          </span>
+        </h2>
+        <div id="block-inspector" style="display:none;margin-bottom:12px"></div>
+        <table>
+          <thead><tr><th>#</th><th>Mode</th><th>Fin</th><th>State Root (SHA3)</th><th>Producer</th><th>Txs</th><th>Age</th></tr></thead>
+          <tbody id="blocks"></tbody>
+        </table>
+      </section>
+
+      <div style="display:grid;gap:18px;align-content:start">
+        <section>
+          <h2>Active VPoS Validators (¼ Saturation Cap)</h2>
+          <table>
+            <thead><tr><th>Quantum Address</th><th>Stake</th><th>Lottery Weight</th></tr></thead>
+            <tbody id="vals"></tbody>
+          </table>
+        </section>
+
+        <section>
+          <h2>Quantum Account Inspector</h2>
+          <div class="row">
+            <input id="addr-q" class="mono" placeholder="aura1q… quantum address" style="flex:1">
+            <button type="button" class="btn cyan" data-action="inspect-addr">Lookup</button>
+          </div>
+          <div id="acct-res" class="mono" style="margin-top:10px;font-size:12px"></div>
+        </section>
+
+        <section>
+          <h2>Node Telemetry</h2>
+          <div class="log" id="log"></div>
+        </section>
+      </div>
+    </div>
+    <div class="sub mono" id="gen"></div>
   </div>
 
-  <section>
-    <h2>Fair-launch progress: PoW bootstrap → Verified Proof-of-Stake at block <span id="posh"></span></h2>
-    <div class="bar"><div id="prog" style="width:0%"></div></div>
-    <div class="chainviz" id="viz"></div>
-  </section>
+  <!-- ==================== TAB 2: POST-QUANTUM WALLET ==================== -->
+  <div id="tab-wallet" class="tabpane">
+    <div class="grid-eq">
+      <section>
+        <h2>
+          <span>Non-Custodial Post-Quantum Wallet</span>
+          <span class="badge-pq">100% Client-Side Signing</span>
+        </h2>
+        <p class="sub" style="margin-top:0">
+          Your 256-bit Quantum Master Seed never leaves your browser. It deterministically derives both an
+          <b>Ed25519</b> key (32 B) and a <b>NIST FIPS 204 ML-DSA-44</b> lattice key (1,312 B pubkey / 2,420 B signature).
+        </p>
+        <label>Your Quantum-Shielded Address (SHA3-256 commitment)</label>
+        <div class="row">
+          <input id="w-addr" class="mono" readonly style="flex:1">
+          <button type="button" class="btn ghost" data-action="copy" data-target="w-addr">Copy</button>
+        </div>
 
-  <div class="grid2">
-    <section>
-      <h2>Latest blocks</h2>
-      <table><thead><tr><th>#</th><th>Type</th><th>State root</th><th>Producer</th><th>Txs</th><th>Base fee</th><th>Age</th></tr></thead>
-      <tbody id="blocks"></tbody></table>
-    </section>
-    <div style="display:grid; gap:18px; align-content:start">
-      <section>
-        <h2>VPoS validators (lottery weight capped at ¼ of stake)</h2>
-        <table><thead><tr><th>Address</th><th>Stake</th><th>Weight</th></tr></thead><tbody id="vals"></tbody></table>
+        <div class="cards" style="margin-top:12px">
+          <div class="card"><div class="k">Liquid Balance</div><div class="v" id="w-bal">0</div><div class="s">AURA</div></div>
+          <div class="card"><div class="k">Active Stake</div><div class="v" id="w-stake">0</div><div class="s" id="w-del">Self-delegated</div></div>
+          <div class="card"><div class="k">Nonce</div><div class="v" id="w-nonce">0</div><div class="s" id="w-unbond">Unbonding: 0</div></div>
+        </div>
+
+        <div id="w-assets" class="sub mono" style="margin-top:10px"></div>
+
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+          <h3 style="margin-top:0">🔑 256-bit Quantum Master Seed & Hybrid Public Keys</h3>
+          <label>NIST FIPS 204 ML-DSA-44 Lattice Public Key (1,312 bytes, prefix)</label>
+          <input id="w-pqpk" class="mono" readonly>
+          <label>Ed25519 Classical Public Key (32 bytes)</label>
+          <input id="w-edpk" class="mono" readonly>
+          <label>Master Seed (64 hex chars — KEEP SECRET)</label>
+          <div class="row">
+            <input id="w-seed" class="mono" type="password" style="flex:1">
+            <button type="button" class="btn ghost" data-action="toggle-seed">Show</button>
+            <button type="button" class="btn ghost" data-action="import-seed">Import</button>
+            <button type="button" class="btn amber" data-action="new-wallet">New Wallet</button>
+          </div>
+        </div>
       </section>
+
+      <div style="display:grid;gap:18px;align-content:start">
+        <section>
+          <h2>Transfer AURA (Hybrid PQ-Signed)</h2>
+          <label>Recipient Quantum Address (aura1q…)</label>
+          <input id="tx-to" class="mono" placeholder="aura1q…">
+          <label>Amount (AURA)</label>
+          <input id="tx-amt" type="number" step="0.001" value="5">
+          <div class="row" style="margin-top:12px">
+            <button type="button" class="btn" data-action="transfer">Sign (ML-DSA-44 + Ed25519) & Send</button>
+            <button type="button" class="btn green" data-tab="miner">Need AURA? Mine Free in 1s →</button>
+          </div>
+          <div id="tx-out"></div>
+        </section>
+
+        <section>
+          <h2>VPoS Staking, Unbonding & Pool Delegation</h2>
+          <div class="row">
+            <div style="flex:1">
+              <label>Stake / Unstake Amount (AURA)</label>
+              <input id="stk-amt" type="number" step="1" value="25">
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button type="button" class="btn green" data-action="stake">Stake AURA</button>
+            <button type="button" class="btn amber" data-action="unstake">Unstake (10-blk lockup)</button>
+          </div>
+          <label style="margin-top:12px">Non-Custodial Pool Delegation (Validator aura1q…, empty = self)</label>
+          <div class="row">
+            <input id="del-to" class="mono" placeholder="aura1q… validator pool" style="flex:1">
+            <button type="button" class="btn cyan" data-action="delegate">Delegate Stake</button>
+          </div>
+          <div id="stk-out"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 3: BROWSER POW MINER ==================== -->
+  <div id="tab-miner" class="tabpane">
+    <section>
+      <h2>
+        <span>Permissionless SHA3-256 Fair-Distribution Miner</span>
+        <span class="pill pow">Zero Gas Fee · Anti-Sybil CPU Proof-of-Work</span>
+      </h2>
+      <p class="sub" style="margin-top:0">
+        AuraChain has <b>zero pre-mine</b> and no centralized faucet keys. Anyone on Earth can earn real on-chain
+        <b>50.000000 AURA</b> per valid SHA3-256 Proof-of-Work share anchored to the live chain tip, signed client-side
+        with your Post-Quantum wallet. Difficulty retargets automatically if &gt;4 claims land in one block.
+      </p>
+      <div class="cards" style="margin:14px 0">
+        <div class="card"><div class="k">Miner Recipient</div><div class="v mono" style="font-size:12.5px" id="m-addr">–</div></div>
+        <div class="card"><div class="k">Browser Hashrate</div><div class="v" id="m-rate">0 H/s</div><div class="s">Pure SHA3-256 (Keccak)</div></div>
+        <div class="card"><div class="k">Share Reward</div><div class="v" id="m-rew">50.000000 AURA</div><div class="s">From 10B hard-capped supply</div></div>
+        <div class="card"><div class="k">Shares Mined (Session)</div><div class="v" id="m-won">0</div><div class="s" id="m-hashes">0 hashes computed</div></div>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-mine-once" class="btn amber" data-action="mine-once">⚡ Mine 1 Share (+50 AURA)</button>
+        <button type="button" id="btn-mine-loop" class="btn green" data-action="mine-loop">🔄 Auto-Mine Continuous</button>
+        <button type="button" id="btn-mine-stop" class="btn ghost" data-action="mine-stop" disabled>Stop</button>
+      </div>
+      <div id="mine-out"></div>
+      <div class="log" id="mine-log" style="margin-top:12px">Ready. Click "⚡ Mine 1 Share (+50 AURA)" to compute a real SHA3-256 PoW proof in your browser.</div>
+    </section>
+  </div>
+
+  <!-- ==================== TAB 4: AURALAUNCH DEX & ROYALTY NFTS ==================== -->
+  <div id="tab-dex" class="tabpane">
+    <div class="grid2">
       <section>
-        <h2>Account lookup</h2>
-        <input id="addr" placeholder="aura… address, press Enter">
-        <div id="acct" class="mono" style="margin-top:8px"></div>
+        <h2>
+          <span>AuraLaunch — Rug-Proof Bonding-Curve Token DEX</span>
+          <span class="badge-pq">0% Insider Pre-Mine · x·y=k</span>
+        </h2>
+        <p class="sub" style="margin-top:0">
+          100% of every token's 1,000,000,000 supply is locked into an immutable protocol constant-product curve.
+          Liquidity can never be rugged. Every trade burns EIP-1559 AURA base fees.
+        </p>
+        <table>
+          <thead><tr><th>Token</th><th>Name</th><th>Spot Price (AURA)</th><th>Pool AURA</th><th>Holders</th><th>Trades</th><th>Trade</th></tr></thead>
+          <tbody id="dex-tokens"></tbody>
+        </table>
+
+        <div class="grid-eq" style="margin-top:14px">
+          <div style="background:var(--bg2);padding:12px;border-radius:10px;border:1px solid var(--line)">
+            <h3 style="margin-top:0">Swap on Bonding Curve</h3>
+            <label>Token Symbol</label>
+            <input id="swap-sym" value="QBIT" class="mono">
+            <label>Amount (AURA when buying / Tokens when selling)</label>
+            <input id="swap-amt" type="number" step="1" value="10">
+            <div class="row" style="margin-top:10px">
+              <button type="button" class="btn green" data-action="buy-token">Buy Token</button>
+              <button type="button" class="btn amber" data-action="sell-token">Sell Token</button>
+            </div>
+          </div>
+
+          <div style="background:var(--bg2);padding:12px;border-radius:10px;border:1px solid var(--line)">
+            <h3 style="margin-top:0">Launch Fair Community Token</h3>
+            <label>Ticker Symbol (2–8 chars)</label>
+            <input id="new-sym" placeholder="e.g. QUARK" class="mono">
+            <label>Token Name</label>
+            <input id="new-name" placeholder="e.g. Quark Community Coin">
+            <button type="button" class="btn" style="margin-top:10px" data-action="create-token">Launch 1B Supply on Curve</button>
+          </div>
+        </div>
+        <div id="dex-out"></div>
+      </section>
+
+      <section>
+        <h2>
+          <span>AUA Quantum NFTs</span>
+          <span class="pill fin">Protocol-Enforced Royalties</span>
+        </h2>
+        <p class="sub" style="margin-top:0">
+          Creator royalties (up to 25%) are enforced directly inside L1 consensus apply_tx on every sale.
+        </p>
+        <div id="nft-list" class="nft-grid"></div>
+
+        <div style="background:var(--bg2);padding:12px;border-radius:10px;border:1px solid var(--line);margin-top:14px">
+          <h3 style="margin-top:0">Mint AUA Quantum NFT</h3>
+          <label>Title</label>
+          <input id="nft-name" placeholder="e.g. Lattice Singularity #7">
+          <label>Permanent Content URI (ar://, ipfs://, sha3://)</label>
+          <input id="nft-uri" class="mono" placeholder="sha3://quantum-artifact-hash">
+          <div class="row">
+            <div style="flex:1">
+              <label>Creator Royalty (%)</label>
+              <input id="nft-roy" type="number" min="0" max="25" step="0.5" value="10">
+            </div>
+            <div style="flex:1">
+              <label>Initial Sale Price (AURA, 0=unlisted)</label>
+              <input id="nft-price" type="number" min="0" step="1" value="15">
+            </div>
+          </div>
+          <button type="button" class="btn cyan" style="margin-top:10px" data-action="mint-nft">Mint Quantum NFT</button>
+          <div id="nft-out"></div>
+        </div>
       </section>
     </div>
   </div>
 
-  <div class="grid2">
-    <section>
-      <h2>L2 "Metropolis" state roots anchored on L1</h2>
-      <table><thead><tr><th>L1 block</th><th>Sequencer</th><th>Commitment</th></tr></thead><tbody id="anchors"></tbody></table>
-    </section>
-    <section>
-      <h2>Node log</h2>
-      <div class="log" id="log"></div>
-    </section>
+  <!-- ==================== TAB 5: DAO GOVERNANCE & L2 METROPOLIS ==================== -->
+  <div id="tab-dao" class="tabpane">
+    <div class="grid2">
+      <section>
+        <h2>
+          <span>On-Chain DAO Governance (AIPs)</span>
+          <span class="pill pos">1 Staked AURA = 1 Vote</span>
+        </h2>
+        <div id="dao-list" style="display:grid;gap:12px"></div>
+
+        <div style="background:var(--bg2);padding:12px;border-radius:10px;border:1px solid var(--line);margin-top:14px">
+          <h3 style="margin-top:0">Submit AuraChain Improvement Proposal (requires ≥10 staked AURA)</h3>
+          <label>Proposal Title</label>
+          <input id="aip-title" placeholder="AIP-2: Expand Metropolis L2 Parallel Lanes">
+          <label>Specification Summary</label>
+          <textarea id="aip-sum" rows="2" placeholder="Describe the protocol parameter or ecosystem upgrade…"></textarea>
+          <button type="button" class="btn" style="margin-top:10px" data-action="propose">Submit On-Chain Proposal</button>
+          <div id="dao-out"></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>
+          <span>L2 "Metropolis" Rollup State Anchors</span>
+          <span class="badge-pq">Settled on L1</span>
+        </h2>
+        <p class="sub" style="margin-top:0">
+          High-throughput off-chain execution batches compress state transitions into deterministic SHA3-256 roots
+          anchored permanently onto AuraChain L1.
+        </p>
+        <table>
+          <thead><tr><th>Batch</th><th>L1 Block</th><th>Sequencer</th><th>Commitment & State Root</th></tr></thead>
+          <tbody id="anchors"></tbody>
+        </table>
+        <div style="background:var(--bg2);padding:12px;border-radius:10px;border:1px solid var(--line);margin-top:14px">
+          <h3 style="margin-top:0">Anchor Custom L2 State Commitment</h3>
+          <input id="anc-data" class="mono" placeholder="metropolis-zk:batch=custom:root=…">
+          <button type="button" class="btn cyan" style="margin-top:10px" data-action="anchor">Anchor State Root on L1</button>
+          <div id="anc-out"></div>
+        </div>
+      </section>
+    </div>
   </div>
-  <div class="sub mono" id="gen"></div>
+
+  <!-- ==================== TAB 6: WHITEPAPER, NODE & SHARE ==================== -->
+  <div id="tab-docs" class="tabpane">
+    <div class="grid2">
+      <section>
+        <h2>AuraChain Quantum v1.0 — Technical Specification</h2>
+        <p class="sub">Synthesizing Bitcoin's fair-launch scarcity, Cardano's Ouroboros PoS rigor, Ethereum's EIP-1559 & rollup modularity, Solana-inspired L2 batching, and NIST Post-Quantum Lattice Cryptography.</p>
+        <table>
+          <tbody>
+            <tr><th>Network ID</th><td class="mono">aurachain-quantum-1</td></tr>
+            <tr><th>Signature Standard</th><td><b>Hybrid NIST FIPS 204 ML-DSA-44</b> (lattice) + <b>Ed25519</b> (elliptic curve)</td></tr>
+            <tr><th>Hash & Merkle Function</th><td><b>NIST FIPS 202 SHA3-256</b> (128-bit quantum Grover resistance)</td></tr>
+            <tr><th>Address Format</th><td class="mono">aura1q + 40-hex SHA3-256 pubkey commitment (quantum-shielded until spend)</td></tr>
+            <tr><th>Launch & Supply</th><td>0% Pre-Mine, 0% VC/Team · Hard Cap <b>10,000,000,000 AURA</b> · Halving every 1M blocks</td></tr>
+            <tr><th>Consensus & Finality</th><td>PoW Bootstrap → Ouroboros VPoS (¼ saturation cap) + Casper ⅔ BFT Checkpoint Finality</td></tr>
+            <tr><th>Slashing & Lockup</th><td>Cryptographic double-sign slashing (50% burn + 10% bounty) · 10-block unbonding queue</td></tr>
+            <tr><th>Fee Economics</th><td>EIP-1559 dynamic base fee (100% permanently burned) + producer priority tips</td></tr>
+            <tr><th>Native Ecosystem</th><td>Permissionless powmine distribution · DAO AIPs · AuraLaunch x·y=k DEX · AUA Royalty NFTs · L2 Anchors</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Run a Sovereign Full Peer Node on Your Machine (Zero Cost)</h3>
+        <pre class="code" id="peer-cmd"></pre>
+      </section>
+
+      <div style="display:grid;gap:18px;align-content:start">
+        <section>
+          <h2>Circulate & Share AuraChain Live</h2>
+          <p class="sub" style="margin-top:0">Invite anyone globally to generate a Post-Quantum wallet, mine 50 AURA in their browser, stake, trade, and run peer nodes:</p>
+          <div class="row" style="margin-top:10px">
+            <a id="sh-x" target="_blank" rel="noopener" class="btn">Share on X / Twitter</a>
+            <a id="sh-rd" target="_blank" rel="noopener" class="btn amber">Post to Reddit</a>
+            <a id="sh-hn" target="_blank" rel="noopener" class="btn ghost">Submit to Hacker News</a>
+            <a id="sh-tg" target="_blank" rel="noopener" class="btn cyan">Share on Telegram</a>
+            <button type="button" class="btn green" data-action="copy-invite">Copy Launch Invite</button>
+          </div>
+          <div id="sh-msg"></div>
+          <h3>Open Source & Binary Releases</h3>
+          <div class="row">
+            <a href="https://github.com/sanzaya-p/aurachain" target="_blank" rel="noopener" class="btn ghost">📦 GitHub Repository</a>
+            <a href="https://github.com/sanzaya-p/aurachain/releases" target="_blank" rel="noopener" class="btn ghost">⬇️ Windows & Linux CLI Binaries</a>
+          </div>
+        </section>
+
+        <section>
+          <h2>Public JSON-RPC / REST Endpoints</h2>
+          <pre class="code">GET  /info                 # Full chain & quantum consensus telemetry
+GET  /tip                  # Lightweight sync header (~120 bytes)
+GET  /ecosystem            # Live DAO proposals, DEX pools, NFTs, L2 batches
+GET  /blocks?from=0&amp;limit=50
+GET  /block/&lt;height&gt;
+GET  /proof/&lt;height&gt;/&lt;idx&gt; # SHA3-256 Merkle inclusion branch
+GET  /account/&lt;aura1q…&gt;    # Balance, stake, tokens, NFTs, nonce
+POST /tx                   # Submit Hybrid PQ-signed transaction
+GET  /pulse                # Trigger autonomous VPoS slot &amp; L2 batch</pre>
+        </section>
+      </div>
+    </div>
+  </div>
 </main>
-<script>
+
+<script type="module">
+import { ml_dsa44 } from "https://esm.sh/@noble/post-quantum@0.5.4/ml-dsa";
+import { ed25519 } from "https://esm.sh/@noble/curves@1.9.7/ed25519";
+import { sha3_256 } from "https://esm.sh/@noble/hashes@1.8.0/sha3";
+
+const NETWORK = "aurachain-quantum-1";
+const COIN = 1_000_000;
 const $ = id => document.getElementById(id);
-const short = (s, n = 10) => s ? s.slice(0, n) + '…' : '–';
-const fmt = s => Number(s).toLocaleString(undefined, { maximumFractionDigits: 6 });
-let lastTip = -1, cache = [], lastAnchors = 0;
+const enc = s => new TextEncoder().encode(s);
+const toHex = b => Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+const fromHex = h => {
+  const s = h.trim();
+  if (s.length % 2 !== 0) throw new Error("odd hex length");
+  const out = new Uint8Array(s.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(s.slice(i * 2, i * 2 + 2), 16);
+  return out;
+};
+const concatBytes = (...arrs) => {
+  const len = arrs.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(len);
+  let off = 0;
+  for (const a of arrs) { out.set(a, off); off += a.length; }
+  return out;
+};
+const short = (s, n = 13) => s ? `${s.slice(0, n)}…${s.slice(-4)}` : "–";
+const fmt = s => Number(s || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
-async function j(p) { const r = await fetch(p); return r.json(); }
+let wallet = null;
+let chainInfo = null;
+let myAccount = null;
+let lastRenderedHeight = -1;
+let mining = false;
+let autoMine = false;
+let sessionWon = 0;
+let sessionHashes = 0;
 
-async function tick() {
+// ---------------- Post-Quantum Wallet Derivation (Exact match with src/crypto.rs) ----------------
+function deriveWallet(seedBytes) {
+  const edSeed = sha3_256(concatBytes(enc("aurachain-ed25519-v1:"), seedBytes));
+  const pqSeed = sha3_256(concatBytes(enc("aurachain-mldsa44-v1:"), seedBytes));
+  const edPk = ed25519.getPublicKey(edSeed);
+  const pqKeys = ml_dsa44.keygen(pqSeed);
+  const hybridPk = concatBytes(edPk, pqKeys.publicKey);
+  const addrDigest = sha3_256(concatBytes(enc("aurachain-addr-v1:"), hybridPk));
+  const address = "aura1q" + toHex(addrDigest.slice(0, 20));
+  return {
+    seedHex: toHex(seedBytes),
+    edSeed,
+    edPkHex: toHex(edPk),
+    pqPkHex: toHex(pqKeys.publicKey),
+    pqSk: pqKeys.secretKey,
+    pubHex: toHex(hybridPk),
+    address,
+  };
+}
+
+function initWallet() {
+  const saved = localStorage.getItem("aurachain_quantum_seed_v1");
+  let seed;
+  if (saved && /^[0-9a-fA-F]{64}$/.test(saved)) {
+    seed = fromHex(saved);
+  } else {
+    seed = crypto.getRandomValues(new Uint8Array(32));
+    localStorage.setItem("aurachain_quantum_seed_v1", toHex(seed));
+  }
+  wallet = deriveWallet(seed);
+  renderWalletStatic();
+}
+
+function renderWalletStatic() {
+  $("hdr-wallet").textContent = `${wallet.address.slice(0, 12)}…`;
+  $("w-addr").value = wallet.address;
+  $("w-seed").value = wallet.seedHex;
+  $("w-edpk").value = wallet.edPkHex;
+  $("w-pqpk").value = wallet.pqPkHex.slice(0, 96) + "… (1,312 bytes NIST FIPS 204 ML-DSA-44)";
+  $("m-addr").textContent = wallet.address;
+}
+
+function signAndBuildTx(kind, to, amountMicro, feeMicro, nonce, data) {
+  const dataHash = toHex(sha3_256(enc(data)));
+  const preimage = enc(`aurachain-tx-v1|${NETWORK}|${kind}|${wallet.pubHex}|${to}|${amountMicro}|${feeMicro}|${nonce}|${dataHash}`);
+  const edSig = ed25519.sign(preimage, wallet.edSeed);
+  const pqSig = ml_dsa44.sign(preimage, wallet.pqSk);
+  const sigHex = toHex(concatBytes(edSig, pqSig));
+  return {
+    kind,
+    from_pubkey: wallet.pubHex,
+    to,
+    amount: amountMicro,
+    fee: feeMicro,
+    nonce,
+    data,
+    signature: sigHex,
+  };
+}
+
+async function apiGet(p) {
+  const r = await fetch(p, { cache: "no-store" });
+  const j = await r.json();
+  if (!r.ok || (j && typeof j === "object" && !Array.isArray(j) && j.error)) {
+    throw new Error((j && j.error) || `HTTP ${r.status}`);
+  }
+  return j;
+}
+
+async function submitSignedTx(kind, to, amountMicro, data, outElId, zeroFee = false) {
+  const box = outElId ? $(outElId) : null;
   try {
-    const i = await j('/info');
-    $('net').textContent = `${i.network} · node ${i.self_url} · peers: ${i.peers.length ? i.peers.join(', ') : 'none'} · mempool ${i.mempool}`;
-    $('height').textContent = i.height.toLocaleString();
-    $('cons').textContent = i.next_consensus === 'pos' ? 'VPoS' : 'Proof-of-Work';
-    $('phase').textContent = i.next_consensus === 'pos' ? 'VPoS live' : 'PoW fair launch';
-    $('phase').className = 'pill ' + i.next_consensus;
-    $('circ').textContent = fmt(i.circulating);
-    $('burned').textContent = fmt(i.burned);
-    $('reward').textContent = fmt(i.block_reward);
-    $('basefee').textContent = i.base_fee;
-    $('staked').textContent = fmt(i.total_staked);
-    $('diff').textContent = `${(i.difficulty / 1e6).toFixed(1)}M · ${(i.hashrate / 1e6).toFixed(2)} MH/s`;
-    $('posh').textContent = i.pos_start_height;
-    $('prog').style.width = Math.min(100, 100 * i.height / i.pos_start_height) + '%';
-    $('gen').textContent = `genesis ${i.genesis_hash} — "${i.genesis_message}" · max supply ${fmt(i.max_supply)} AURA`;
-    $('vals').innerHTML = i.validators.length ? i.validators.map(v =>
-      `<tr><td class="mono">${short(v.address, 14)}</td><td>${fmt(v.stake)}</td><td>${fmt(v.weight)}</td></tr>`).join('')
-      : '<tr><td colspan="3" class="sub">nobody staking yet — chain stays on PoW</td></tr>';
-    $('log').textContent = i.log.join('\n');
-
-    if (i.height !== lastTip) {
-      // Incremental fetch: only blocks we haven't seen (keeps bandwidth tiny).
-      const from = lastTip < 0 ? Math.max(0, i.height - 19) : Math.max(lastTip + 1, i.height - 19);
-      const fresh = await j(`/blocks?from=${from}&limit=20`);
-      cache = cache.concat(fresh).filter((b, k, arr) => arr.findIndex(x => x.header.height === b.header.height) === k);
-      cache = cache.filter(b => b.header.height <= i.height).slice(-20);
-      const bs = cache.slice().reverse();
-      const now = Date.now() / 1000;
-      $('blocks').innerHTML = bs.map(b => {
-        const h = b.header;
-        return `<tr class="${h.height > lastTip && lastTip >= 0 ? 'new' : ''}"><td>${h.height}</td>
-          <td><span class="pill ${h.consensus === 'genesis' ? '' : h.consensus}">${h.consensus.toUpperCase()}</span></td>
-          <td class="mono">${short(h.prev_hash === '0'.repeat(64) ? 'genesis' : h.state_root, 12)}</td>
-          <td class="mono">${short(h.producer, 14)}</td><td>${b.txs.length}</td>
-          <td>${(h.base_fee / 1e6).toFixed(6)}</td><td>${Math.max(0, Math.round(now - h.timestamp))}s</td></tr>`;
-      }).join('');
-      $('viz').innerHTML = bs.slice(0, 14).reverse().map(b =>
-        `<div class="blk ${b.header.consensus}">#${b.header.height}<span class="tx">${b.txs.length}tx</span></div>`).join('');
-      if (Date.now() - lastAnchors > 30000) {
-        lastAnchors = Date.now();
-        const an = await j('/anchors');
-        $('anchors').innerHTML = an.length ? an.slice(0, 10).map(a =>
-          `<tr><td>${a.height}</td><td class="mono">${short(a.from, 14)}</td><td class="mono">${a.data.replace(/root=([0-9a-f]{16})[0-9a-f]+/, 'root=$1…')}</td></tr>`).join('')
-          : '<tr><td colspan="3" class="sub">no L2 batches anchored yet</td></tr>';
-      }
-      lastTip = i.height;
+    if (box) box.innerHTML = `<div class="toast">Signing with Ed25519 + NIST FIPS 204 ML-DSA-44…</div>`;
+    const [acct, inf] = await Promise.all([apiGet(`/account/${wallet.address}`), apiGet("/info")]);
+    const nonce = acct.next_nonce ?? 0;
+    const fee = zeroFee ? 0 : (inf.base_fee_micro || 1000) * 2;
+    const tx = signAndBuildTx(kind, to, amountMicro, fee, nonce, data);
+    const resp = await fetch("/tx", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(tx),
+    });
+    const j = await resp.json();
+    if (!resp.ok || j.error) throw new Error(j.error || `HTTP ${resp.status}`);
+    if (!j.included_in_block) {
+      setTimeout(() => fetch("/pulse").then(() => refreshAll()).catch(() => {}), 1500);
+      setTimeout(() => fetch("/pulse").then(() => refreshAll()).catch(() => {}), 5300);
     }
+    await refreshAll();
+    const blkMsg = j.included_in_block ? ` · confirmed in Block #${j.included_in_block}!` : " · sealing in next 5s VPoS slot!";
+    if (box) box.innerHTML = `<div class="toast ok">✅ Accepted! TXID: <span class="mono">${j.txid}</span>${blkMsg}</div>`;
+    return j;
   } catch (e) {
-    $('net').innerHTML = `<span class="err">node unreachable: ${e}</span>`;
+    if (box) box.innerHTML = `<div class="toast err">❌ ${esc(e.message || e)}</div>`;
+    throw e;
   }
 }
-$('addr').addEventListener('keydown', async e => {
-  if (e.key !== 'Enter') return;
-  const a = await j('/account/' + e.target.value.trim());
-  $('acct').innerHTML = `balance <b>${fmt(a.balance)}</b> AURA · staked ${fmt(a.stake)} · nonce ${a.nonce}`;
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+// ---------------- Live Data Refresh ----------------
+async function refreshAll() {
+  try {
+    const [i, eco, acct] = await Promise.all([
+      apiGet("/info"),
+      apiGet("/ecosystem"),
+      wallet ? apiGet(`/account/${wallet.address}`) : Promise.resolve(null),
+    ]);
+    chainInfo = i;
+    myAccount = acct;
+
+    $("net").textContent = `${i.network} · ${i.self_url} · storage: ${i.storage || "local"} · mempool: ${i.mempool}`;
+    $("height").textContent = `#${Number(i.height || 0).toLocaleString()}`;
+    $("bft-sub").textContent = `BFT Finalized Checkpoint: #${i.finalized_height}`;
+    $("fin-pill").textContent = `🔒 Finalized #${i.finalized_height}`;
+    $("cons").textContent = i.next_consensus === "pos" ? "VPoS (Quantum)" : "PoW Bootstrap";
+    $("phase").textContent = i.next_consensus === "pos" ? "VPoS Live" : "PoW Fair Launch";
+    $("phase").className = "pill " + i.next_consensus;
+    $("circ").textContent = `${fmt(i.circulating)} AURA`;
+    $("burned").textContent = `${fmt(i.burned)} AURA`;
+    $("basefee-sub").textContent = `Base fee: ${i.base_fee} AURA`;
+    $("staked").textContent = `${fmt(i.total_staked)} AURA`;
+    $("reward").textContent = `${fmt(i.block_reward)} AURA`;
+    $("powrew-sub").textContent = `Browser PoW share: ${fmt(i.pow_claim_reward)} AURA`;
+    $("eco-counts").textContent = `${i.tokens_count} Tok · ${i.nfts_count} NFT · ${i.proposals_count} AIP`;
+    $("posh").textContent = i.pos_start_height;
+    $("prog").style.width = Math.min(100, (100 * i.height) / i.pos_start_height) + "%";
+    $("gen").textContent = `Genesis ${i.genesis_hash.slice(0, 24)}… — "${i.genesis_message}"`;
+    $("log").textContent = (i.log || []).join("\n");
+
+    $("vals").innerHTML = (i.validators || []).length
+      ? i.validators.map(v => `<tr><td class="mono">${short(v.address, 14)}</td><td>${fmt(v.stake)}</td><td>${fmt(v.weight)}</td></tr>`).join("")
+      : `<tr><td colspan="3" class="sub">No active validators — PoW fallback active</td></tr>`;
+
+    // Only rebuild block rows when chain height advances so clicks never hit stale rows
+    if (i.height !== lastRenderedHeight) {
+      const from = Math.max(0, i.height - 17);
+      const blks = await apiGet(`/blocks?from=${from}&limit=20`);
+      const rev = blks.slice().reverse();
+      const now = Date.now() / 1000;
+      $("blocks").innerHTML = rev.map(b => {
+        const h = b.header;
+        const fin = h.height <= i.finalized_height ? "🔒" : "⏳";
+        return `<tr class="clickable" data-action="inspect-block" data-height="${h.height}">
+          <td><b>#${h.height}</b></td>
+          <td><span class="pill ${h.consensus === "genesis" ? "fin" : h.consensus}">${h.consensus.toUpperCase()}</span></td>
+          <td>${fin}</td>
+          <td class="mono">${short(h.state_root, 10)}</td>
+          <td class="mono">${h.producer ? short(h.producer, 12) : "genesis"}</td>
+          <td>${b.txs.length}</td>
+          <td>${Math.max(0, Math.round(now - h.timestamp))}s</td>
+        </tr>`;
+      }).join("");
+      $("viz").innerHTML = rev.slice(0, 14).reverse().map(b =>
+        `<div class="blk ${b.header.consensus}" data-action="inspect-block" data-height="${b.header.height}">#${b.header.height}<span>${b.txs.length} tx</span></div>`
+      ).join("");
+      lastRenderedHeight = i.height;
+    }
+
+    // Wallet stats
+    if (acct) {
+      $("hdr-wallet").textContent = `${wallet.address.slice(0, 10)}… · ${fmt(acct.balance)} AURA`;
+      $("w-bal").textContent = fmt(acct.balance);
+      $("w-stake").textContent = fmt(acct.stake);
+      $("w-nonce").textContent = acct.next_nonce;
+      $("w-del").textContent = acct.delegate ? `Delegated → ${short(acct.delegate, 10)}` : "Self-delegated";
+      const unbSum = (acct.unbonding || []).reduce((s, u) => s + u.amount, 0) / COIN;
+      $("w-unbond").textContent = `Unbonding: ${fmt(unbSum)} AURA`;
+      const tb = Object.entries(acct.token_balances || {}).map(([k, v]) => `${k}: ${fmt(v.balance)}`).join(" · ");
+      const no = (acct.nfts_owned || []).length ? `NFTs owned: #${acct.nfts_owned.join(", #")}` : "";
+      $("w-assets").textContent = [tb, no].filter(Boolean).join(" | ") || "No community tokens or NFTs held yet.";
+    }
+
+    // Ecosystem: DEX tokens
+    $("dex-tokens").innerHTML = (eco.tokens || []).map(t => `
+      <tr>
+        <td><b>${esc(t.symbol)}</b></td>
+        <td>${esc(t.name)}</td>
+        <td class="mono">${esc(t.spot_price_aura)}</td>
+        <td>${fmt(t.aura_reserve)}</td>
+        <td>${t.holders}</td>
+        <td>${t.trades}</td>
+        <td><button type="button" class="btn ghost" style="padding:3px 9px;font-size:11px" data-action="select-token" data-sym="${esc(t.symbol)}">Select</button></td>
+      </tr>`).join("") || `<tr><td colspan="7" class="sub">No tokens launched yet</td></tr>`;
+
+    // Ecosystem: NFTs
+    $("nft-list").innerHTML = (eco.nfts || []).map(n => `
+      <div class="nft-card">
+        <div class="nft-art">💎 ${esc(n.name)}<div class="mono" style="font-size:10px;color:#93c5fd;font-weight:400">${esc(n.uri.slice(0, 34))}</div></div>
+        <div style="font-weight:700;font-size:13px">#${n.id} · ${esc(n.name)}</div>
+        <div class="sub mono" style="font-size:11px">Owner: ${short(n.owner, 10)}<br>Royalty: ${(n.royalty_bps / 100).toFixed(1)}% · Sales: ${n.sales}</div>
+        ${n.price_aura
+          ? `<button type="button" class="btn green" style="padding:6px 10px;font-size:12px;margin-top:auto" data-action="buy-nft" data-id="${n.id}" data-price="${n.price_micro}">Buy for ${fmt(n.price_aura)} AURA</button>`
+          : `<span class="sub" style="margin-top:auto">Not listed for sale</span>`}
+      </div>`).join("");
+
+    // Ecosystem: DAO Proposals
+    $("dao-list").innerHTML = (eco.proposals || []).map(p => {
+      const aye = parseFloat(p.aye_aura) || 0, nay = parseFloat(p.nay_aura) || 0;
+      const pct = aye + nay > 0 ? Math.round((100 * aye) / (aye + nay)) : 100;
+      return `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px">
+        <div class="row" style="justify-content:space-between">
+          <b>AIP-${p.id}: ${esc(p.title)}</b>
+          <span class="pill ${p.status === "rejected" ? "pow" : "pos"}">${esc(p.status).toUpperCase()} (ends #${p.end_height})</span>
+        </div>
+        <div class="sub" style="margin:6px 0">${esc(p.summary)}</div>
+        <div class="bar"><div style="width:${pct}%"></div></div>
+        <div class="row" style="justify-content:space-between;margin-top:8px;font-size:12px">
+          <span>Aye: <b>${fmt(p.aye_aura)} AURA</b> · Nay: <b>${fmt(p.nay_aura)} AURA</b> (${p.voters_count} voters)</span>
+          <div class="row">
+            <button type="button" class="btn green" style="padding:4px 10px;font-size:11.5px" data-action="vote" data-id="${p.id}" data-choice="aye">Vote Aye</button>
+            <button type="button" class="btn amber" style="padding:4px 10px;font-size:11.5px" data-action="vote" data-id="${p.id}" data-choice="nay">Vote Nay</button>
+          </div>
+        </div>
+      </div>`;
+    }).join("");
+
+    // Ecosystem: L2 Metropolis batches
+    $("anchors").innerHTML = (eco.l2_batches || []).map(b => `
+      <tr>
+        <td><b>#${b.batch_index}</b></td>
+        <td>#${b.l1_height}</td>
+        <td class="mono">${short(b.sequencer, 11)}</td>
+        <td class="mono">${esc(b.commitment.replace(/root=([0-9a-f]{16})[0-9a-f]+/, "root=$1…"))}</td>
+      </tr>`).join("");
+
+  } catch (e) {
+    console.warn("Telemetry refresh transient retry:", e);
+  }
+}
+
+// ---------------- Interactive Actions (CSP-Clean Event Delegation) ----------------
+function switchTab(name) {
+  document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".tabpane").forEach(p => p.classList.toggle("active", p.id === `tab-${name}`));
+}
+
+async function triggerPulse() {
+  await apiGet("/pulse");
+  await refreshAll();
+}
+
+async function inspectBlock(h) {
+  const box = $("block-inspector");
+  box.style.display = "block";
+  box.innerHTML = `<div class="toast">Loading Block #${h}…</div>`;
+  try {
+    const b = await apiGet(`/block/${h}`);
+    const txHtml = b.txs.length
+      ? b.txs.map((t, idx) => `<div style="margin-top:6px;padding:6px;background:#0d1528;border-radius:6px">
+          <b>TX #${idx} [${esc(t.kind)}]</b> amount=${(t.amount / COIN).toFixed(6)} fee=${(t.fee / COIN).toFixed(6)}
+          <button type="button" class="btn cyan" style="padding:3px 9px;font-size:11px;margin-left:8px" data-action="verify-merkle" data-height="${h}" data-idx="${idx}">Verify SHA3-256 Merkle Proof</button>
+          <div id="mp-${h}-${idx}" class="mono" style="font-size:11px;margin-top:4px"></div>
+        </div>`).join("")
+      : `<div class="sub">No user transactions in this block (coinbase / VPoS heartbeat).</div>`;
+    box.innerHTML = `<div class="toast">
+      <div class="row" style="justify-content:space-between">
+        <b>Block #${b.header.height} (${esc(b.header.consensus).toUpperCase()})</b>
+        <button type="button" class="btn ghost" style="padding:2px 8px;font-size:11px" data-action="close-inspector">Close</button>
+      </div>
+      Hash: <span class="mono">${esc(b.hash)}</span><br>
+      Prev: <span class="mono">${esc(b.header.prev_hash.slice(0, 32))}…</span> · TxRoot: <span class="mono">${esc(b.header.tx_root.slice(0, 28))}…</span><br>
+      Msg: "${esc(b.header.message)}"
+      ${txHtml}
+    </div>`;
+  } catch (e) {
+    box.innerHTML = `<div class="toast err">❌ ${esc(e.message || e)}</div>`;
+  }
+}
+
+async function verifyMerkle(h, idx) {
+  const targetEl = $(`mp-${h}-${idx}`);
+  if (targetEl) targetEl.textContent = "Verifying SHA3-256 Merkle branch…";
+  const p = await apiGet(`/proof/${h}/${idx}`);
+  if (targetEl) {
+    targetEl.innerHTML = p.verified
+      ? `✅ Verified cryptographic SHA3-256 Merkle inclusion (${p.steps.length} tree levels) → root ${esc(p.tx_root.slice(0, 24))}…`
+      : `❌ Verification failed`;
+  }
+}
+
+async function inspectAddr() {
+  const a = $("addr-q").value.trim();
+  if (!a) return;
+  try {
+    const r = await apiGet(`/account/${a}`);
+    $("acct-res").innerHTML = `Balance: <b>${fmt(r.balance)} AURA</b> · Staked: <b>${fmt(r.stake)} AURA</b> · Nonce: ${r.nonce} · NFTs: ${(r.nfts_owned || []).length}`;
+  } catch (e) {
+    $("acct-res").textContent = `Error: ${e.message || e}`;
+  }
+}
+
+function parseAuraMicro(val) {
+  const n = Number(val);
+  if (!isFinite(n) || n <= 0) throw new Error("Amount must be > 0");
+  return Math.round(n * COIN);
+}
+
+// ---------------- Browser SHA3-256 Permissionless PoW Miner ----------------
+function hashToU128BE(bytes) {
+  let v = 0n;
+  for (let i = 0; i < 16; i++) v = (v << 8n) | BigInt(bytes[i]);
+  return v;
+}
+
+function stopMining() {
+  mining = false;
+  autoMine = false;
+  $("btn-mine-once").disabled = false;
+  $("btn-mine-loop").disabled = false;
+  $("btn-mine-stop").disabled = true;
+}
+
+async function startMining(continuous) {
+  if (mining) return;
+  mining = true;
+  autoMine = continuous;
+  $("btn-mine-once").disabled = true;
+  $("btn-mine-loop").disabled = true;
+  $("btn-mine-stop").disabled = false;
+  const logEl = $("mine-log");
+  const addLog = m => { logEl.textContent = `[${new Date().toLocaleTimeString()}] ${m}\n` + logEl.textContent.slice(0, 1800); };
+
+  while (mining) {
+    try {
+      const inf = await apiGet("/info");
+      const anchorH = inf.height;
+      const anchorHash = inf.tip_hash;
+      const target = BigInt(inf.pow_claim_target);
+      addLog(`Mining SHA3-256 PoW share anchored to Block #${anchorH} (${anchorHash.slice(0, 14)}…)`);
+
+      let nonce = BigInt(Math.floor(Math.random() * 1e12));
+      const t0 = performance.now();
+      let localHashes = 0;
+      let foundHex = null;
+
+      while (mining) {
+        for (let i = 0; i < 1500; i++) {
+          nonce++;
+          localHashes++;
+          sessionHashes++;
+          const nHex = nonce.toString(16);
+          const digest = sha3_256(enc(`aura-pow-claim-v1|${NETWORK}|${anchorHash}|${wallet.address}|${nHex}`));
+          if (hashToU128BE(digest) <= target) {
+            foundHex = nHex;
+            break;
+          }
+        }
+        const dt = (performance.now() - t0) / 1000;
+        if (dt > 0.05) $("m-rate").textContent = `${Math.round(localHashes / dt).toLocaleString()} H/s`;
+        $("m-hashes").textContent = `${sessionHashes.toLocaleString()} hashes computed`;
+        if (foundHex) break;
+        await new Promise(r => setTimeout(r, 0));
+      }
+
+      if (!mining || !foundHex) break;
+      addLog(`✨ Valid PoW nonce 0x${foundHex} found (${localHashes.toLocaleString()} SHA3-256 hashes)! Signing Hybrid PQ claim…`);
+      await submitSignedTx("powmine", "", 0, `${anchorH}:${anchorHash}:${foundHex}`, "mine-out", true);
+      sessionWon++;
+      $("m-won").textContent = sessionWon;
+      addLog(`🎉 Minted +50.000000 AURA to ${wallet.address}!`);
+      if (!autoMine) break;
+      await new Promise(r => setTimeout(r, 5500));
+    } catch (e) {
+      addLog(`Error: ${e.message || e}`);
+      break;
+    }
+  }
+  stopMining();
+}
+
+// Unified event delegation — zero inline `onclick` attributes required
+document.addEventListener("click", e => {
+  const tabTrigger = e.target.closest("[data-tab]");
+  if (tabTrigger) {
+    switchTab(tabTrigger.dataset.tab);
+    return;
+  }
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  const act = el.dataset.action;
+  if (act === "pulse") triggerPulse();
+  else if (act === "inspect-block") inspectBlock(Number(el.dataset.height));
+  else if (act === "inspect-input-block") inspectBlock(Number($("blk-q").value || 0));
+  else if (act === "close-inspector") $("block-inspector").style.display = "none";
+  else if (act === "verify-merkle") verifyMerkle(Number(el.dataset.height), Number(el.dataset.idx));
+  else if (act === "inspect-addr") inspectAddr();
+  else if (act === "copy") navigator.clipboard.writeText($(el.dataset.target).value);
+  else if (act === "toggle-seed") { const inp = $("w-seed"); inp.type = inp.type === "password" ? "text" : "password"; }
+  else if (act === "import-seed") {
+    try {
+      const raw = $("w-seed").value.trim();
+      if (!/^[0-9a-fA-F]{64}$/.test(raw)) throw new Error("Seed must be exactly 64 hex characters (32 bytes)");
+      localStorage.setItem("aurachain_quantum_seed_v1", raw.toLowerCase());
+      wallet = deriveWallet(fromHex(raw));
+      renderWalletStatic();
+      refreshAll();
+    } catch (err) { alert(err.message); }
+  }
+  else if (act === "new-wallet") {
+    const seed = crypto.getRandomValues(new Uint8Array(32));
+    localStorage.setItem("aurachain_quantum_seed_v1", toHex(seed));
+    wallet = deriveWallet(seed);
+    renderWalletStatic();
+    refreshAll();
+  }
+  else if (act === "transfer") submitSignedTx("transfer", $("tx-to").value.trim(), parseAuraMicro($("tx-amt").value), "", "tx-out");
+  else if (act === "stake") submitSignedTx("stake", "", parseAuraMicro($("stk-amt").value), "", "stk-out");
+  else if (act === "unstake") submitSignedTx("unstake", "", parseAuraMicro($("stk-amt").value), "", "stk-out");
+  else if (act === "delegate") submitSignedTx("delegate", $("del-to").value.trim(), 0, "", "stk-out");
+  else if (act === "mine-once") startMining(false);
+  else if (act === "mine-loop") startMining(true);
+  else if (act === "mine-stop") stopMining();
+  else if (act === "select-token") $("swap-sym").value = el.dataset.sym;
+  else if (act === "buy-token") submitSignedTx("buytoken", "", parseAuraMicro($("swap-amt").value), $("swap-sym").value.trim().toUpperCase(), "dex-out");
+  else if (act === "sell-token") submitSignedTx("selltoken", "", parseAuraMicro($("swap-amt").value), $("swap-sym").value.trim().toUpperCase(), "dex-out");
+  else if (act === "create-token") submitSignedTx("createtoken", "", 0, `${$("new-sym").value.trim()}|${$("new-name").value.trim()}`, "dex-out");
+  else if (act === "mint-nft") {
+    const spec = {
+      name: $("nft-name").value.trim(),
+      uri: $("nft-uri").value.trim() || `sha3://${toHex(sha3_256(enc(Date.now().toString()))).slice(0, 32)}`,
+      royalty_bps: Math.round((Number($("nft-roy").value) || 0) * 100),
+      price: Math.round((Number($("nft-price").value) || 0) * COIN),
+    };
+    submitSignedTx("mintnft", "", 0, JSON.stringify(spec), "nft-out");
+  }
+  else if (act === "buy-nft") submitSignedTx("buynft", "", Number(el.dataset.price), String(el.dataset.id), "nft-out");
+  else if (act === "propose") submitSignedTx("propose", "", 0, `${$("aip-title").value.trim()}|${$("aip-sum").value.trim()}`, "dao-out");
+  else if (act === "vote") submitSignedTx("vote", "", 0, `${el.dataset.id}:${el.dataset.choice}`, "dao-out");
+  else if (act === "anchor") submitSignedTx("anchor", "", 0, $("anc-data").value.trim(), "anc-out");
+  else if (act === "copy-invite") {
+    navigator.clipboard.writeText(`Experience AuraChain Quantum v1.0 (Post-Quantum NIST FIPS 204 ML-DSA-44 L1 — mine 50 AURA free in browser): ${location.origin}`);
+    $("sh-msg").innerHTML = `<div class="toast ok">Copied launch invite link to clipboard!</div>`;
+  }
 });
-tick(); setInterval(() => { if (!document.hidden) tick(); }, 5000);
+
+// ---------------- Share & Node Commands ----------------
+function setupShare() {
+  const url = location.origin;
+  const text = "AuraChain Quantum v1.0 is LIVE — Autonomous Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) L1 Blockchain with 0% pre-mine, browser SHA3-256 mining, DEX, Royalty NFTs & DAO:";
+  $("sh-x").href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+  $("sh-rd").href = `https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}`;
+  $("sh-hn").href = `https://news.ycombinator.com/submitlink?u=${encodeURIComponent(url)}&t=${encodeURIComponent("Show HN: AuraChain Quantum – Post-Quantum (FIPS 204 ML-DSA) L1 in Rust")}`;
+  $("sh-tg").href = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  $("peer-cmd").textContent =
+`# 1. Generate a Post-Quantum (ML-DSA-44 + Ed25519) validator keypair
+aurachain keygen --out my-quantum-wallet.json
+
+# 2. Claim 50 AURA via permissionless SHA3-256 PoW share
+aurachain pow-claim --key my-quantum-wallet.json --node ${url}
+
+# 3. Sync & run a local full verifying peer node connected to the live network
+aurachain node --port 7001 --data ./aura-data --key my-quantum-wallet.json --peer ${url}`;
+}
+
+initWallet();
+setupShare();
+refreshAll();
+setInterval(() => { if (!document.hidden) refreshAll(); }, 5000);
 </script>
 </body>
 </html>
