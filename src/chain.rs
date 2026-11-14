@@ -885,7 +885,7 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
                 }
             }
             s.used_pow_nullifiers.insert(nullifier);
-            if s.used_pow_nullifiers.len() > 2_000 {
+            while s.used_pow_nullifiers.len() > 500 {
                 let first = s.used_pow_nullifiers.iter().next().cloned().unwrap();
                 s.used_pow_nullifiers.remove(&first);
             }

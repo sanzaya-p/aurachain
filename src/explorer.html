@@ -1273,7 +1273,7 @@ async function startMining(continuous) {
       $("m-won").textContent = sessionWon;
       addLog(`🎉 Minted +${rewAmt} AURA to ${wallet.address}!`);
       if (!autoMine) break;
-      await new Promise(r => setTimeout(r, 5500));
+      await new Promise(r => setTimeout(r, 12000));
     } catch (e) {
       addLog(`Error: ${e.message || e}`);
       break;
@@ -1400,7 +1400,7 @@ window.addEventListener("hashchange", checkIncomingGift);
 initWallet();
 checkIncomingGift();
 refreshAll();
-setInterval(() => { if (!document.hidden) refreshAll(); }, 5000);
+setInterval(() => { if (!document.hidden) refreshAll(); }, 10000);
 </script>
 </body>
 </html>

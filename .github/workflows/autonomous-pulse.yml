@@ -9,6 +9,9 @@ on:
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   quantum-pulse:
     name: Autonomous VPoS & L2 Pulse
@@ -17,11 +20,12 @@ jobs:
       - name: Trigger VPoS Slot & L2 Metropolis Batch Settlement
         run: |
           echo "Pinging AuraChain Quantum Cloud Validator (/pulse)..."
-          PULSE=$(curl -fsSL --retry 3 --max-time 25 "https://aurachain-quantum.vercel.app/pulse")
+          CURL_FLAGS="-fsSL --retry 5 --retry-delay 4 --retry-all-errors --max-time 30"
+          PULSE=$(curl $CURL_FLAGS "https://aurachain-quantum.vercel.app/pulse" || curl $CURL_FLAGS "https://aurachain-drab.vercel.app/pulse")
           echo "Pulse response: $PULSE"
-          INFO=$(curl -fsSL --retry 3 --max-time 25 "https://aurachain-quantum.vercel.app/info")
+          INFO=$(curl $CURL_FLAGS "https://aurachain-quantum.vercel.app/info")
           echo "$INFO" | jq '{network, version, height, finalized_height, storage, circulating, total_staked, l2_batches_count}'
-          ACT=$(curl -fsSL --retry 3 --max-time 25 "https://aurachain-quantum.vercel.app/activity")
+          ACT=$(curl $CURL_FLAGS "https://aurachain-quantum.vercel.app/activity")
           echo "$ACT" | jq '{human_wallets, named_identities, human_txs, messages_count, active_peers_count}'
 
   rust-verify:

@@ -24,6 +24,7 @@ import urllib.request
 from email.utils import format_datetime
 
 NODE_URL = os.environ.get("AURA_NODE_URL", "https://aurachain-quantum.vercel.app").rstrip("/")
+MIRROR_NODE_URL = os.environ.get("AURA_MIRROR_NODE_URL", "https://aurachain-drab.vercel.app").rstrip("/")
 PORTAL_URL = os.environ.get("AURA_PORTAL_URL", "https://sanzaya-p.github.io/aurachain").rstrip("/")
 REPO_URL = "https://github.com/sanzaya-p/aurachain"
 LEDGER_URL = "https://github.com/sanzaya-p/aurachain-ledger"
@@ -32,21 +33,27 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 
 
-def fetch_json(path: str, retries: int = 4) -> dict:
-    url = f"{NODE_URL}{path}"
+def fetch_json(path: str, retries: int = 6) -> dict:
+    bases = [NODE_URL]
+    if MIRROR_NODE_URL and MIRROR_NODE_URL != NODE_URL:
+        bases.append(MIRROR_NODE_URL)
+    delays = [3, 6, 10, 15, 20, 25]
     last_err: Exception | None = None
     for attempt in range(retries):
+        base = bases[attempt % len(bases)]
+        url = f"{base}{path}"
         try:
             req = urllib.request.Request(
                 url,
-                headers={"User-Agent": "AuraChain-Continuous-Publisher/1.2 (+https://github.com/sanzaya-p/aurachain)"},
+                headers={"User-Agent": "AuraChain-Continuous-Publisher/1.2.1 (+https://github.com/sanzaya-p/aurachain)"},
             )
-            with urllib.request.urlopen(req, timeout=25) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as exc:  # noqa: BLE001
             last_err = exc
-            time.sleep(2 * (attempt + 1))
-    raise RuntimeError(f"Failed to fetch {url}: {last_err}")
+            if attempt + 1 < retries:
+                time.sleep(delays[min(attempt, len(delays) - 1)])
+    raise RuntimeError(f"Failed to fetch {NODE_URL}{path} after {retries} attempts: {last_err}")
 
 
 def post_json(url: str, payload: dict, headers: dict[str, str] | None = None) -> dict:
@@ -437,9 +444,17 @@ def main() -> None:
     DOCS.mkdir(parents=True, exist_ok=True)
     now_utc = dt.datetime.now(dt.timezone.utc)
 
-    info = fetch_json("/info")
-    activity = fetch_json("/activity")
-    eco = fetch_json("/ecosystem")
+    try:
+        info = fetch_json("/info")
+        activity = fetch_json("/activity")
+        eco = fetch_json("/ecosystem")
+    except Exception as exc:  # noqa: BLE001
+        if (DOCS / "digest.html").exists() and (DOCS / "status.json").exists():
+            print(f"[warn] Transient upstream outage ({exc}); preserving existing live digest snapshot.")
+            (DOCS / "sitemap.xml").write_text(build_portal_sitemap(now_utc), encoding="utf-8")
+            (DOCS / ".nojekyll").write_text("", encoding="utf-8")
+            return
+        raise
 
     status = {
         "generated_at": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),

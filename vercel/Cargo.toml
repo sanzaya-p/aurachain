@@ -1,6 +1,6 @@
 [package]
 name = "aurachain-node"
-version = "1.2.0"
+version = "1.2.2"
 edition = "2021"
 description = "AuraChain Quantum v1.2 serverless VPoS + L2 autonomous node & continuous syndication hub for Vercel (Post-Quantum NIST FIPS 204 ML-DSA-44 + Ed25519)"
 license = "MIT"

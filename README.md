@@ -1,4 +1,4 @@
-# AuraChain Quantum v1.2 (`aurachain-quantum-1`)
+# AuraChain Quantum v1.2.2 (`aurachain-quantum-1`)
 
 [![Autonomous Pulse & CI](https://github.com/sanzaya-p/aurachain/actions/workflows/autonomous-pulse.yml/badge.svg)](https://github.com/sanzaya-p/aurachain/actions/workflows/autonomous-pulse.yml)
 [![Continuous Publisher](https://github.com/sanzaya-p/aurachain/actions/workflows/continuous-publish.yml/badge.svg)](https://sanzaya-p.github.io/aurachain/)

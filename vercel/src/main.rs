@@ -30,7 +30,7 @@ use vercel_runtime::{run, service_fn, Error, Request, Response, ResponseBody};
 const EXPLORER_HTML: &str = include_str!("explorer.html");
 const SEED_CHAIN: &str = include_str!("../seed/chain.json");
 const IDLE_HEARTBEAT_SECS: u64 = 300;
-const RECENT: usize = 32;
+const RECENT: usize = 20;
 const BLOB_NS: &str = "aura-q1";
 
 // ------------------------------------------------------------------- head
@@ -88,7 +88,9 @@ static FILE_LOCK: Mutex<()> = Mutex::new(());
 static OP_LOCK: Mutex<()> = Mutex::new(());
 static CACHE: Mutex<Option<(Instant, u64, Head)>> = Mutex::new(None);
 static GH_STATE: Mutex<Option<(u64, String, String)>> = Mutex::new(None); // (ver, commit_sha, tree_sha)
+static PENDING_TXS: Mutex<Vec<Tx>> = Mutex::new(Vec::new());
 static LIVE_PEERS: Mutex<BTreeMap<String, PeerHeartbeat>> = Mutex::new(BTreeMap::new());
+const MIN_CLOUD_COMMIT_SECS: u64 = 15;
 
 const CAS_SCRIPT: &str = "if (redis.call('GET', KEYS[1]) or '0') ~= ARGV[1] then return 0 end \
 redis.call('SET', KEYS[1], ARGV[2]) redis.call('SET', KEYS[2], ARGV[3]) \
@@ -169,41 +171,72 @@ impl Store {
 
     fn gh_json(&self, method: &str, path: &str, body: Option<Value>) -> Result<Value, GhErr> {
         let Store::GitHub { token, .. } = self else { unreachable!() };
-        let req = ureq::request(method, &format!("https://api.github.com{path}"))
-            .set("Authorization", &format!("Bearer {token}"))
-            .set("Accept", "application/vnd.github+json")
-            .set("X-GitHub-Api-Version", "2022-11-28")
-            .set("User-Agent", "aurachain-quantum-node/1.1")
-            .timeout(Duration::from_secs(12));
-        let res = match body {
-            Some(b) => req.send_json(b),
-            None => req.call(),
-        };
-        match res {
-            Ok(resp) => resp.into_json::<Value>().map_err(|e| GhErr::Msg(e.to_string())),
-            Err(ureq::Error::Status(409 | 422, _)) => Err(GhErr::Conflict),
-            Err(ureq::Error::Status(code, r)) => {
-                let txt = r.into_string().unwrap_or_default();
-                Err(GhErr::Msg(format!("HTTP {code}: {}", txt.chars().take(180).collect::<String>())))
+        let url = format!("https://api.github.com{path}");
+        let mut last_err = String::from("github request failed");
+        for attempt in 0..3u64 {
+            if attempt > 0 {
+                std::thread::sleep(Duration::from_millis(300 * attempt * attempt));
             }
-            Err(e) => Err(GhErr::Msg(e.to_string())),
+            let req = ureq::request(method, &url)
+                .set("Authorization", &format!("Bearer {token}"))
+                .set("Accept", "application/vnd.github+json")
+                .set("X-GitHub-Api-Version", "2022-11-28")
+                .set("User-Agent", "aurachain-quantum-node/1.2.1")
+                .timeout(Duration::from_secs(18));
+            let res = match &body {
+                Some(b) => req.send_json(b.clone()),
+                None => req.call(),
+            };
+            match res {
+                Ok(resp) => return resp.into_json::<Value>().map_err(|e| GhErr::Msg(e.to_string())),
+                Err(ureq::Error::Status(409 | 422, _)) => return Err(GhErr::Conflict),
+                Err(ureq::Error::Status(code @ (429 | 500 | 502 | 503 | 504), r)) => {
+                    let txt = r.into_string().unwrap_or_default();
+                    last_err = format!("HTTP {code}: {}", txt.chars().take(180).collect::<String>());
+                }
+                Err(ureq::Error::Status(code, r)) => {
+                    let txt = r.into_string().unwrap_or_default();
+                    return Err(GhErr::Msg(format!("HTTP {code}: {}", txt.chars().take(180).collect::<String>())));
+                }
+                Err(e) => {
+                    last_err = e.to_string();
+                }
+            }
         }
+        Err(GhErr::Msg(last_err))
     }
 
     fn gh_raw(&self, path: &str) -> Result<Option<String>, String> {
         let Store::GitHub { token, .. } = self else { unreachable!() };
-        let res = ureq::get(&format!("https://api.github.com{path}"))
-            .set("Authorization", &format!("Bearer {token}"))
-            .set("Accept", "application/vnd.github.raw+json")
-            .set("X-GitHub-Api-Version", "2022-11-28")
-            .set("User-Agent", "aurachain-quantum-node/1.1")
-            .timeout(Duration::from_secs(12))
-            .call();
-        match res {
-            Ok(resp) => resp.into_string().map(Some).map_err(|e| format!("github raw read: {e}")),
-            Err(ureq::Error::Status(404, _)) => Ok(None),
-            Err(e) => Err(format!("github raw {path}: {e}")),
+        let url = format!("https://api.github.com{path}");
+        let mut last_err = String::from("github raw read failed");
+        for attempt in 0..3u64 {
+            if attempt > 0 {
+                std::thread::sleep(Duration::from_millis(300 * attempt * attempt));
+            }
+            let res = ureq::get(&url)
+                .set("Authorization", &format!("Bearer {token}"))
+                .set("Accept", "application/vnd.github.raw+json")
+                .set("X-GitHub-Api-Version", "2022-11-28")
+                .set("User-Agent", "aurachain-quantum-node/1.2.1")
+                .timeout(Duration::from_secs(18))
+                .call();
+            match res {
+                Ok(resp) => return resp.into_string().map(Some).map_err(|e| format!("github raw read: {e}")),
+                Err(ureq::Error::Status(404, _)) => return Ok(None),
+                Err(ureq::Error::Status(code @ (429 | 500 | 502 | 503 | 504), _)) => {
+                    last_err = format!("github raw {path}: HTTP {code}");
+                }
+                Err(ureq::Error::Status(code, r)) => {
+                    let txt = r.into_string().unwrap_or_default();
+                    return Err(format!("github raw {path}: HTTP {code}: {}", txt.chars().take(160).collect::<String>()));
+                }
+                Err(e) => {
+                    last_err = format!("github raw {path}: {e}");
+                }
+            }
         }
+        Err(last_err)
     }
 
     fn redis(&self, args: Vec<String>) -> Result<Value, String> {
@@ -262,6 +295,37 @@ impl Store {
             .send_json(json!({ "urls": urls }));
     }
 
+    /// Zero-API-quota CDN reader (`raw.githubusercontent.com`) for all read-only GET endpoints.
+    fn load_readonly(&self) -> Result<Option<(u64, Head)>, String> {
+        if let Store::GitHub { repo, branch, .. } = self {
+            let cb = chain::now_secs() / 15;
+            let cdn_url = format!("https://raw.githubusercontent.com/{repo}/{branch}/head.json?cb={cb}");
+            for attempt in 0..2u64 {
+                if attempt > 0 {
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                match ureq::get(&cdn_url)
+                    .set("User-Agent", "aurachain-quantum-node/1.2.2")
+                    .timeout(Duration::from_secs(12))
+                    .call()
+                {
+                    Ok(resp) => {
+                        if let Ok(raw) = resp.into_string() {
+                            if let Ok(mut head) = serde_json::from_str::<Head>(&raw) {
+                                let ver = head.ver.max(1);
+                                head.ver = ver;
+                                return Ok(Some((ver, head)));
+                            }
+                        }
+                    }
+                    Err(ureq::Error::Status(404, _)) => return Ok(None),
+                    Err(_) => {}
+                }
+            }
+        }
+        self.load()
+    }
+
     /// Returns `(version, head)` or `None` if the store has not been seeded yet.
     fn load(&self) -> Result<Option<(u64, Head)>, String> {
         match self {
@@ -280,7 +344,33 @@ impl Store {
                     .as_str()
                     .ok_or_else(|| "github commit missing tree sha".to_string())?
                     .to_string();
-                match self.gh_raw(&format!("/repos/{repo}/contents/head.json?ref={commit_sha}"))? {
+                // Fetch immutable commit-pinned `head.json` directly from GitHub's unmetered CDN first
+                // (0 REST API calls, no 1 MB limit, zero stale cache!), falling back to `/git/blobs/{sha}`.
+                let cdn_commit_url = format!("https://raw.githubusercontent.com/{repo}/{commit_sha}/head.json");
+                let mut raw_opt = match ureq::get(&cdn_commit_url)
+                    .set("User-Agent", "aurachain-quantum-node/1.2.2")
+                    .timeout(Duration::from_secs(12))
+                    .call()
+                {
+                    Ok(resp) => resp.into_string().ok(),
+                    Err(ureq::Error::Status(404, _)) => None,
+                    Err(_) => None,
+                };
+                if raw_opt.is_none() {
+                    if let Ok(tree_j) = self.gh_json("GET", &format!("/repos/{repo}/git/trees/{tree_sha}"), None) {
+                        if let Some(bsha) = tree_j["tree"]
+                            .as_array()
+                            .and_then(|arr| {
+                                arr.iter()
+                                    .find(|item| item["path"].as_str() == Some("head.json"))
+                                    .and_then(|item| item["sha"].as_str())
+                            })
+                        {
+                            raw_opt = self.gh_raw(&format!("/repos/{repo}/git/blobs/{bsha}"))?;
+                        }
+                    }
+                }
+                match raw_opt {
                     None => {
                         *GH_STATE.lock().unwrap() = Some((0, commit_sha, tree_sha));
                         Ok(None)
@@ -344,6 +434,14 @@ impl Store {
     fn cas(&self, expected_ver: u64, new_ver: u64, head: &Head, blocks: &[&Block]) -> Result<bool, String> {
         let mut head_to_save = head.clone();
         head_to_save.ver = new_ver;
+        if head_to_save.blocks.len() > RECENT {
+            let drain_n = head_to_save.blocks.len() - RECENT;
+            head_to_save.blocks.drain(..drain_n);
+        }
+        while head_to_save.state.used_pow_nullifiers.len() > 500 {
+            let first = head_to_save.state.used_pow_nullifiers.iter().next().cloned().unwrap();
+            head_to_save.state.used_pow_nullifiers.remove(&first);
+        }
         let head_json = serde_json::to_string(&head_to_save).unwrap();
         match self {
             Store::GitHub { repo, branch, .. } => {
@@ -382,8 +480,9 @@ impl Store {
                     "content": head_json,
                 })];
                 for b in blocks {
+                    let h = b.header.height;
                     tree_items.push(json!({
-                        "path": format!("b/{}.json", b.header.height),
+                        "path": format!("b/s{}/{h}.json", h / 1000),
                         "mode": "100644",
                         "type": "blob",
                         "content": serde_json::to_string(b).unwrap(),
@@ -513,16 +612,29 @@ impl Store {
             Store::GitHub { repo, branch, .. } => {
                 let mut out = Vec::new();
                 for h in from..=to {
-                    let cdn_url = format!("https://raw.githubusercontent.com/{repo}/{branch}/b/{h}.json");
+                    let sharded = format!("b/s{}/{h}.json", h / 1000);
+                    let legacy = format!("b/{h}.json");
+                    let candidates = if h >= 2216 { [sharded, legacy] } else { [legacy, sharded] };
                     let mut parsed = None;
-                    if let Ok(resp) = ureq::get(&cdn_url).timeout(Duration::from_secs(6)).call() {
-                        if let Ok(s) = resp.into_string() {
-                            parsed = serde_json::from_str::<Block>(&s).ok();
+                    for rel in &candidates {
+                        let cdn_url = format!("https://raw.githubusercontent.com/{repo}/{branch}/{rel}");
+                        if let Ok(resp) = ureq::get(&cdn_url).timeout(Duration::from_secs(6)).call() {
+                            if let Ok(s) = resp.into_string() {
+                                parsed = serde_json::from_str::<Block>(&s).ok();
+                                if parsed.is_some() {
+                                    break;
+                                }
+                            }
                         }
                     }
                     if parsed.is_none() {
-                        if let Ok(Some(s)) = self.gh_raw(&format!("/repos/{repo}/contents/b/{h}.json?ref={branch}")) {
-                            parsed = serde_json::from_str::<Block>(&s).ok();
+                        for rel in &candidates {
+                            if let Ok(Some(s)) = self.gh_raw(&format!("/repos/{repo}/contents/{rel}?ref={branch}")) {
+                                parsed = serde_json::from_str::<Block>(&s).ok();
+                                if parsed.is_some() {
+                                    break;
+                                }
+                            }
                         }
                     }
                     if let Some(b) = parsed {
@@ -1327,88 +1439,170 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
     let now = chain::now_secs();
     let is_pulse = path == "/pulse";
     let is_tx = method == "POST" && path == "/tx";
-    let can_produce = is_pulse || is_tx || (method == "GET" && path == "/info");
-    let cache_ttl = if is_pulse || is_tx {
-        Duration::ZERO
-    } else {
-        Duration::from_millis(4000)
+    let can_produce = is_pulse || is_tx;
+    let read_ttl = Duration::from_secs(15);
+
+    let sync_pending = |head: &mut Head| {
+        if let Ok(mut pend) = PENDING_TXS.lock() {
+            let included: std::collections::HashSet<String> =
+                head.blocks.iter().flat_map(|b| b.txs.iter().map(|t| t.signature.clone())).collect();
+            let st = &head.state;
+            pend.retain(|t| {
+                !included.contains(&t.signature)
+                    && t.sender().map(|a| t.nonce >= st.account(&a).nonce).unwrap_or(false)
+            });
+            for pt in pend.iter() {
+                if !head.mempool.iter().any(|m| m.signature == pt.signature) && admit_tx(head, pt).is_ok() {
+                    head.mempool.push(pt.clone());
+                }
+            }
+        }
     };
 
-    // Fast lock-free read path when cache is warm and no block production is due.
-    if !is_pulse && !is_tx {
-        if let Some(c) = CACHE
+    // 1. Pure Zero-API-Quota Read Path (`GET /info`, `/activity`, `/ecosystem`, `/feed.xml`, etc.)
+    if !can_produce {
+        if let Some(mut h) = CACHE
             .lock()
             .unwrap()
             .as_ref()
-            .filter(|c| {
-                c.0.elapsed() < cache_ttl
-                    && (!can_produce
-                        || (c.2.mempool.is_empty()
-                            && now.saturating_sub(c.2.tip().header.timestamp) < IDLE_HEARTBEAT_SECS))
-            })
-            .map(|c| (c.1, c.2.clone()))
+            .filter(|c| c.0.elapsed() < read_ttl)
+            .map(|c| c.2.clone())
         {
-            return finish_response(&method, &path, &q, c.1, &key, &store, None, None, now);
+            sync_pending(&mut h);
+            return finish_response(&method, &path, &q, h, &key, &store, None, None, now);
         }
+        let _op_guard = OP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let (fresh, stale) = {
+            let guard = CACHE.lock().unwrap();
+            (
+                guard.as_ref().filter(|c| c.0.elapsed() < read_ttl).map(|c| (c.1, c.2.clone())),
+                guard.as_ref().map(|c| (c.1, c.2.clone())),
+            )
+        };
+        let (ver, mut head) = match fresh {
+            Some(c) => c,
+            None => match store.load_readonly() {
+                Ok(Some(c)) => {
+                    *CACHE.lock().unwrap() = Some((Instant::now(), c.0, c.1.clone()));
+                    c
+                }
+                Ok(None) => match seed(&store) {
+                    Ok(c) => {
+                        *CACHE.lock().unwrap() = Some((Instant::now(), c.0, c.1.clone()));
+                        c
+                    }
+                    Err(e) => return json_err(500, e),
+                },
+                Err(e) => match stale {
+                    Some(s) => s,
+                    None => return json_err(502, e),
+                },
+            },
+        };
+        let _ = ver;
+        drop(_op_guard);
+        sync_pending(&mut head);
+        return finish_response(&method, &path, &q, head, &key, &store, None, None, now);
     }
 
-    let _op_guard = OP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let cached = if !is_pulse && !is_tx {
-        CACHE
-            .lock()
-            .unwrap()
-            .as_ref()
-            .filter(|c| {
-                c.0.elapsed() < cache_ttl
-                    && (!can_produce
-                        || (c.2.mempool.is_empty()
-                            && now.saturating_sub(c.2.tip().header.timestamp) < IDLE_HEARTBEAT_SECS))
-            })
-            .map(|c| (c.1, c.2.clone()))
+    // 2. Write / Pulse Path (`POST /tx` and `GET /pulse`)
+    let parsed_tx = if is_tx {
+        let tx = match serde_json::from_slice::<Tx>(&body) {
+            Ok(t) => t,
+            Err(e) => return json_err(400, format!("bad tx json: {e}")),
+        };
+        if let Err(e) = tx.verify_signature() {
+            return json_err(400, e);
+        }
+        Some(tx)
     } else {
         None
     };
 
-    let (mut ver, mut head) = match cached {
-        Some(c) => c,
+    let _op_guard = OP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // On `/pulse`, check zero-quota state first: if tip is fresh and mempool is empty, skip API calls!
+    if is_pulse {
+        let probe = CACHE
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|c| (c.1, c.2.clone()))
+            .or_else(|| store.load_readonly().ok().flatten());
+        if let Some((pv, mut ph)) = probe {
+            sync_pending(&mut ph);
+            if ph.mempool.is_empty() && now.saturating_sub(ph.tip().header.timestamp) < IDLE_HEARTBEAT_SECS {
+                *CACHE.lock().unwrap() = Some((Instant::now(), pv, ph.clone()));
+                drop(_op_guard);
+                return finish_response(&method, &path, &q, ph, &key, &store, None, None, now);
+            }
+        }
+    }
+
+    // Reuse warm authoritative `(ver, head)` when `GH_STATE` matches `ver`, avoiding redundant `store.load()`!
+    let warm_auth = {
+        let gh_ver = GH_STATE.lock().unwrap().as_ref().map(|x| x.0);
+        let c_guard = CACHE.lock().unwrap();
+        match (gh_ver, c_guard.as_ref()) {
+            (Some(gv), Some((_, cv, ch))) if gv == *cv => Some((*cv, ch.clone())),
+            _ => None,
+        }
+    };
+
+    let (mut ver, mut head, auth_ready) = match warm_auth {
+        Some((v, h)) => (v, h, true),
         None => match store.load() {
-            Ok(Some(c)) => c,
+            Ok(Some((v, h))) => (v, h, true),
             Ok(None) => match seed(&store) {
-                Ok(c) => c,
+                Ok((v, h)) => (v, h, true),
                 Err(e) => return json_err(500, e),
             },
-            Err(e) => return json_err(502, e),
+            Err(e) => {
+                // Graceful fallback via unmetered CDN if GitHub REST API is temporarily rate-limited/5xx
+                match store.load_readonly() {
+                    Ok(Some((v, h))) => (v, h, false),
+                    _ => return json_err(502, e),
+                }
+            }
         },
     };
+    sync_pending(&mut head);
 
     let mut reply: Option<(u16, Value)> = None;
     let mut produced_height: Option<u64> = None;
-    if can_produce {
-        for _attempt in 0..4 {
-            let mut changed = false;
-            let mut new_blocks: Vec<Block> = vec![];
-            if is_tx {
-                let tx = match serde_json::from_slice::<Tx>(&body) {
-                    Ok(t) => t,
-                    Err(e) => return json_err(400, format!("bad tx json: {e}")),
-                };
-                if let Err(e) = admit_tx(&head, &tx) {
-                    return json_err(400, e);
-                };
-                let id = tx.id();
-                head.log(format!("mempool += {} {}", tx.kind.as_str(), &id[..12]));
-                head.mempool.push(tx);
-                changed = true;
-                reply = Some((200, json!({ "txid": id, "status": "accepted" })));
+
+    if let Some(ref tx) = parsed_tx {
+        if let Err(e) = admit_tx(&head, tx) {
+            return json_err(400, e);
+        }
+        let id = tx.id();
+        if let Ok(mut pend) = PENDING_TXS.lock() {
+            if !pend.iter().any(|p| p.signature == tx.signature) {
+                pend.push(tx.clone());
             }
+        }
+        head.log(format!("mempool += {} {}", tx.kind.as_str(), &id[..12]));
+        head.mempool.push(tx.clone());
+        reply = Some((200, json!({ "txid": id, "status": "accepted" })));
+    }
+
+    // Batch cloud Git-CAS commits to at most 1 commit per 15s (unless >=12 txs queued),
+    // keeping worst-case 24/7 mining well below 15% of GitHub's free 5,000 req/hr quota!
+    let slot_ready = is_pulse
+        || now >= head.tip().header.timestamp + MIN_CLOUD_COMMIT_SECS
+        || head.mempool.len() >= 12;
+
+    if slot_ready && auth_ready {
+        for _attempt in 0..4 {
+            let pre_produce_head = head.clone();
+            let mut new_blocks: Vec<Block> = vec![];
             if let Some(k) = &key {
                 if let Some(b) = maybe_produce(&mut head, k, now, is_pulse) {
                     produced_height = Some(b.header.height);
                     new_blocks.push(b);
-                    changed = true;
                 }
             }
-            if !changed {
+            if new_blocks.is_empty() {
                 break;
             }
             let nv = ver + 1;
@@ -1417,21 +1611,32 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
                 Ok(true) => {
                     ver = nv;
                     head.ver = ver;
+                    sync_pending(&mut head);
                     break;
                 }
                 Ok(false) => match store.load() {
                     Ok(Some((v, h))) => {
                         ver = v;
                         head = h;
-                        reply = None;
+                        sync_pending(&mut head);
                         produced_height = None;
                     }
-                    _ => return json_err(502, "store reload failed".into()),
+                    _ => {
+                        head = pre_produce_head;
+                        produced_height = None;
+                        break;
+                    }
                 },
-                Err(e) => return json_err(502, e),
+                Err(_) => {
+                    // Revert uncommitted block and keep queued txs safely in `PENDING_TXS` for next slot!
+                    head = pre_produce_head;
+                    produced_height = None;
+                    break;
+                }
             }
         }
     }
+
     *CACHE.lock().unwrap() = Some((Instant::now(), ver, head.clone()));
     drop(_op_guard);
 
