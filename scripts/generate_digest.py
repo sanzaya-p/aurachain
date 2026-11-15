@@ -20,6 +20,7 @@ import os
 import pathlib
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from email.utils import format_datetime
 
@@ -28,6 +29,7 @@ MIRROR_NODE_URL = os.environ.get("AURA_MIRROR_NODE_URL", "https://aurachain-drab
 PORTAL_URL = os.environ.get("AURA_PORTAL_URL", "https://sanzaya-p.github.io/aurachain").rstrip("/")
 REPO_URL = "https://github.com/sanzaya-p/aurachain"
 LEDGER_URL = "https://github.com/sanzaya-p/aurachain-ledger"
+INDEXNOW_KEY = "a8f4c2e91b7d40639e5a12c8f04b73d1"
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
@@ -336,6 +338,7 @@ def build_rss_xml(info: dict, activity: dict, now_utc: dt.datetime) -> str:
     <title>AuraChain Quantum — Autonomous Network Digest &amp; Town Square</title>
     <link>{PORTAL_URL}/</link>
     <atom:link href="{PORTAL_URL}/rss.xml" rel="self" type="application/rss+xml"/>
+    <atom:link href="https://pubsubhubbub.appspot.com/" rel="hub"/>
     <description>6-hourly cryptographic network digest and on-chain Town Square feed for AuraChain Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256).</description>
     <language>en-us</language>
     <lastBuildDate>{rfc2822(now_utc.timestamp())}</lastBuildDate>
@@ -357,6 +360,85 @@ def build_portal_sitemap(now_utc: dt.datetime) -> str:
   <url><loc>{NODE_URL}/</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>
 </urlset>
 """
+
+
+def ping_search_and_websub() -> list[str]:
+    """Actively pushes live URLs to IndexNow (Bing, DuckDuckGo, ChatGPT Search, Yandex) and Google WebSub."""
+    results: list[str] = []
+    node_host = urllib.parse.urlparse(NODE_URL).netloc
+    portal_parsed = urllib.parse.urlparse(PORTAL_URL)
+
+    indexnow_batches = [
+        (
+            "indexnow-app",
+            {
+                "host": node_host,
+                "key": INDEXNOW_KEY,
+                "keyLocation": f"{NODE_URL}/{INDEXNOW_KEY}.txt",
+                "urlList": [
+                    f"{NODE_URL}/",
+                    f"{NODE_URL}/llms.txt",
+                    f"{NODE_URL}/feed.xml",
+                    f"{NODE_URL}/sitemap.xml",
+                ],
+            },
+        ),
+        (
+            "indexnow-portal",
+            {
+                "host": portal_parsed.netloc,
+                "key": INDEXNOW_KEY,
+                "keyLocation": f"{PORTAL_URL}/{INDEXNOW_KEY}.txt",
+                "urlList": [
+                    f"{PORTAL_URL}/",
+                    f"{PORTAL_URL}/digest.html",
+                    f"{PORTAL_URL}/post-quantum-blockchain-rust.html",
+                    f"{PORTAL_URL}/rss.xml",
+                    f"{PORTAL_URL}/llms.txt",
+                ],
+            },
+        ),
+    ]
+
+    for label, payload in indexnow_batches:
+        try:
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                "https://api.indexnow.org/indexnow",
+                data=data,
+                headers={
+                    "Content-Type": "application/json; charset=utf-8",
+                    "User-Agent": "AuraChain-Continuous-Publisher/1.3",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                results.append(f"{label}:{resp.status}")
+        except urllib.error.HTTPError as exc:
+            results.append(f"{label}:http-{exc.code}")
+        except Exception as exc:  # noqa: BLE001
+            results.append(f"{label}:err-{type(exc).__name__}")
+
+    for feed_label, feed_url in (("websub-app", f"{NODE_URL}/feed.xml"), ("websub-portal", f"{PORTAL_URL}/rss.xml")):
+        try:
+            form = urllib.parse.urlencode({"hub.mode": "publish", "hub.url": feed_url}).encode("utf-8")
+            req = urllib.request.Request(
+                "https://pubsubhubbub.appspot.com/",
+                data=form,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": "AuraChain-Continuous-Publisher/1.3",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                results.append(f"{feed_label}:{resp.status}")
+        except urllib.error.HTTPError as exc:
+            results.append(f"{feed_label}:http-{exc.code}")
+        except Exception as exc:  # noqa: BLE001
+            results.append(f"{feed_label}:err-{type(exc).__name__}")
+
+    return results
 
 
 def syndicate_optional_channels(info: dict, activity: dict) -> list[str]:
@@ -495,12 +577,14 @@ def main() -> None:
         f"- Public Git-CAS Block Ledger: {LEDGER_URL}\n",
         encoding="utf-8",
     )
+    (DOCS / f"{INDEXNOW_KEY}.txt").write_text(INDEXNOW_KEY, encoding="utf-8")
     (DOCS / ".nojekyll").write_text("", encoding="utf-8")
 
+    indexed = ping_search_and_websub()
     syndicated = syndicate_optional_channels(info, activity)
     print(
         f"[ok] Generated AuraChain digest for Block #{info.get('height')} "
-        f"({activity.get('human_wallets')} human wallets). Syndication: {syndicated or ['pages+rss+seo']}"
+        f"({activity.get('human_wallets')} human wallets). Indexing: {indexed}. Syndication: {syndicated or ['pages+rss+seo']}"
     )
 
 

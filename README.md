@@ -1,8 +1,9 @@
-# AuraChain Quantum v1.2.2 (`aurachain-quantum-1`)
+# AuraChain Quantum v1.3.0 (`aurachain-quantum-1`)
 
+[![Live On-Chain Status](https://aurachain-quantum.vercel.app/badge.svg)](https://aurachain-quantum.vercel.app)
 [![Autonomous Pulse & CI](https://github.com/sanzaya-p/aurachain/actions/workflows/autonomous-pulse.yml/badge.svg)](https://github.com/sanzaya-p/aurachain/actions/workflows/autonomous-pulse.yml)
 [![Continuous Publisher](https://github.com/sanzaya-p/aurachain/actions/workflows/continuous-publish.yml/badge.svg)](https://sanzaya-p.github.io/aurachain/)
-[![Live Network](https://img.shields.io/badge/Live_Super--App-aurachain--quantum.vercel.app-7c3aed)](https://aurachain-quantum.vercel.app)
+[![GHCR Package](https://img.shields.io/badge/GHCR-ghcr.io%2Fsanzaya--p%2Faurachain-2563eb)](https://github.com/sanzaya-p/aurachain/pkgs/container/aurachain)
 [![Launch Portal](https://img.shields.io/badge/Launch_Portal_%26_Digest-sanzaya--p.github.io-10b981)](https://sanzaya-p.github.io/aurachain/)
 [![Public Ledger](https://img.shields.io/badge/Public_Git--CAS_Ledger-aurachain--ledger-06b6d4)](https://github.com/sanzaya-p/aurachain-ledger)
 [![Post-Quantum](https://img.shields.io/badge/Cryptography-NIST_FIPS_204_ML--DSA--44_%2B_Ed25519-06b6d4)](./src/crypto.rs)
@@ -73,11 +74,20 @@ Every peer node downloads the chain from genesis, independently verifies every S
   --peer https://aurachain-quantum.vercel.app
 ```
 
-Or via Docker:
+Or run an instant prebuilt container from **GitHub Container Registry** (`ghcr.io`):
 
 ```bash
-docker build -t aurachain-quantum .
-docker run -p 7001:7001 -v aura-data:/data aurachain-quantum
+docker run -p 7001:7001 -v aura-data:/data ghcr.io/sanzaya-p/aurachain:latest
+```
+
+### Embed Live AuraChain Status & Referral Miner on Any Website or README
+
+```markdown
+[![AuraChain Quantum](https://aurachain-quantum.vercel.app/badge.svg)](https://aurachain-quantum.vercel.app/?ref=YOUR_AURA1Q_ADDRESS)
+```
+
+```html
+<script src="https://aurachain-quantum.vercel.app/widget.js" data-ref="YOUR_AURA1Q_ADDRESS" defer></script>
 ```
 
 ### 3. Claim `.aura` Identities, Post on Town Square, Stake, Trade & Govern via CLI
@@ -144,6 +154,10 @@ All endpoints return `application/json` with `Access-Control-Allow-Origin: *`:
 | `POST /tx` | Submit a Hybrid Post-Quantum signed transaction (`Tx` JSON) |
 | `POST /peers` | Announce a syncing P2P full node heartbeat |
 | `GET /pulse` | Idempotent autonomous VPoS slot + L2 Metropolis batch trigger |
+| `GET /badge.svg` | Live dynamic Shields-style SVG badge (`Block #<h> · <n> Wallets · Mine 55 AURA`) |
+| `GET /widget.js` | Self-contained 1-line embeddable status + referral miner widget |
+| `GET /feed.xml` | Real-time RSS 2.0 + Google WebSub (`PubSubHubbub`) syndication stream |
+| `GET /llms.txt` | AI Search & Autonomous Agent discovery manifest |
 
 ---
 

@@ -1028,6 +1028,7 @@ const APP_URL: &str = "https://aurachain-quantum.vercel.app";
 const PORTAL_URL: &str = "https://sanzaya-p.github.io/aurachain";
 const REPO_URL: &str = "https://github.com/sanzaya-p/aurachain";
 const LEDGER_URL: &str = "https://github.com/sanzaya-p/aurachain-ledger";
+const INDEXNOW_KEY: &str = "a8f4c2e91b7d40639e5a12c8f04b73d1";
 
 fn xml_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 16);
@@ -1100,10 +1101,97 @@ fn sitemap_xml(now: u64) -> String {
   <url><loc>{APP_URL}/</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>
   <url><loc>{APP_URL}/llms.txt</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>
   <url><loc>{APP_URL}/feed.xml</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>{APP_URL}/badge.svg</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.7</priority></url>
   <url><loc>{PORTAL_URL}/</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>
   <url><loc>{PORTAL_URL}/digest.html</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.8</priority></url>
   <url><loc>{PORTAL_URL}/post-quantum-blockchain-rust.html</loc><lastmod>{ts}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
 </urlset>
+"#
+    )
+}
+
+fn badge_svg(head: &Head, key: &Option<Keypair>) -> String {
+    let s = &head.state;
+    let tip_h = head.tip().header.height;
+    let humans = human_wallet_count(s, key);
+    let left = "AuraChain Quantum";
+    let right = format!("Block #{tip_h} · {humans} Wallets · Mine 55 AURA");
+    let lw = 128u32;
+    let rw = (right.chars().count() as u32 * 6 + 22).max(210);
+    let tw = lw + rw;
+    let lx = lw / 2;
+    let rx = lw + rw / 2;
+    let right_esc = xml_escape(&right);
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{tw}" height="20" role="img" aria-label="{left}: {right_esc}">
+  <title>{left}: {right_esc}</title>
+  <defs>
+    <linearGradient id="aqg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#0891b2"/>
+    </linearGradient>
+    <linearGradient id="s" x2="0" y2="100%">
+      <stop offset="0" stop-color="#bbb" stop-opacity=".12"/>
+      <stop offset="1" stop-opacity=".12"/>
+    </linearGradient>
+    <clipPath id="r"><rect width="{tw}" height="20" rx="4" fill="#fff"/></clipPath>
+  </defs>
+  <g clip-path="url(#r)">
+    <rect width="{lw}" height="20" fill="#171e34"/>
+    <rect x="{lw}" width="{rw}" height="20" fill="url(#aqg)"/>
+    <rect width="{tw}" height="20" fill="url(#s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+    <text x="{lx}" y="14" fill="#010101" fill-opacity=".35" font-weight="600">{left}</text>
+    <text x="{lx}" y="13.5" font-weight="600">{left}</text>
+    <text x="{rx}" y="14" fill="#010101" fill-opacity=".35" font-weight="600">{right_esc}</text>
+    <text x="{rx}" y="13.5" font-weight="600">{right_esc}</text>
+  </g>
+</svg>"##
+    )
+}
+
+fn widget_js() -> String {
+    format!(
+        r#"(function(){{
+  var s = document.currentScript || (function(){{ var a=document.getElementsByTagName('script'); return a[a.length-1]; }})();
+  var ref = (s && s.getAttribute('data-ref')) || '';
+  var base = '{APP_URL}';
+  var href = ref ? (base + '/?ref=' + encodeURIComponent(ref)) : (base + '/');
+  var bonus = ref ? '55 AURA' : '50 AURA';
+  var box = document.getElementById('aurachain-widget');
+  if (!box) {{
+    box = document.createElement('div');
+    if (s && s.parentNode) s.parentNode.insertBefore(box, s.nextSibling);
+    else document.body.appendChild(box);
+  }}
+  box.style.cssText = 'display:inline-flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:12px;background:#0d1426;border:1px solid #26385e;color:#e5ecff;font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.28)';
+  var dot = document.createElement('span');
+  dot.style.cssText = 'width:9px;height:9px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;display:inline-block';
+  var label = document.createElement('span');
+  label.textContent = 'AuraChain Quantum (FIPS 204 ML-DSA-44)';
+  label.style.fontWeight = '700';
+  var stats = document.createElement('span');
+  stats.style.color = '#67e8f9';
+  stats.textContent = 'Live L1';
+  var btn = document.createElement('a');
+  btn.href = href;
+  btn.target = '_blank';
+  btn.rel = 'noopener';
+  btn.textContent = 'Mine ' + bonus + ' Free \u2192';
+  btn.style.cssText = 'padding:5px 11px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#0891b2);color:#fff;font-weight:700;text-decoration:none;font-size:12px';
+  box.textContent = '';
+  box.appendChild(dot);
+  box.appendChild(label);
+  box.appendChild(stats);
+  box.appendChild(btn);
+  Promise.all([fetch(base + '/tip').then(function(r){{return r.json();}}), fetch(base + '/activity').then(function(r){{return r.json();}})])
+    .then(function(res){{
+      var tip = res[0] || {{}};
+      var act = res[1] || {{}};
+      stats.textContent = 'Block #' + (tip.height || 0) + ' \u00b7 ' + (act.human_wallets || 0) + ' Wallets';
+    }}).catch(function(){{}});
+}})();
 "#
     )
 }
@@ -1283,6 +1371,7 @@ fn feed_xml(head: &Head, key: &Option<Keypair>, now: u64) -> String {
     <title>AuraChain Quantum — Live Post-Quantum L1 &amp; Town Square Feed</title>
     <link>{APP_URL}/</link>
     <atom:link href="{APP_URL}/feed.xml" rel="self" type="application/rss+xml"/>
+    <atom:link href="https://pubsubhubbub.appspot.com/" rel="hub"/>
     <description>Real-time on-chain Town Square posts, Casper BFT checkpoints, browser PoW mining shares, .aura identity claims, DEX token launches, and DAO governance on AuraChain Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256).</description>
     <language>en-us</language>
     <lastBuildDate>{build_date}</lastBuildDate>
@@ -1401,6 +1490,12 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
     }
     if method == "GET" && path == "/sitemap.xml" {
         return (200, sitemap_xml(chain::now_secs()), "application/xml; charset=utf-8");
+    }
+    if method == "GET" && path == "/a8f4c2e91b7d40639e5a12c8f04b73d1.txt" {
+        return (200, INDEXNOW_KEY.to_string(), "text/plain; charset=utf-8");
+    }
+    if method == "GET" && path == "/widget.js" {
+        return (200, widget_js(), "application/javascript; charset=utf-8");
     }
     if method == "GET" && (path == "/favicon.ico" || path == "/favicon.png") {
         return (204, String::new(), "image/x-icon");
@@ -1657,6 +1752,7 @@ fn finish_response(
     if method == "GET" {
         match path {
             "/og.svg" => return (200, og_svg(&head, key), "image/svg+xml; charset=utf-8"),
+            "/badge.svg" => return (200, badge_svg(&head, key), "image/svg+xml; charset=utf-8"),
             "/feed.xml" | "/rss.xml" => return (200, feed_xml(&head, key, now), "application/rss+xml; charset=utf-8"),
             "/llms.txt" | "/.well-known/llms.txt" => {
                 return (200, llms_txt(&head, key, store, now), "text/plain; charset=utf-8")
@@ -1868,7 +1964,17 @@ async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
     }
     let is_syndication = matches!(
         path.as_str(),
-        "/og.svg" | "/feed.xml" | "/rss.xml" | "/sitemap.xml" | "/robots.txt" | "/llms.txt" | "/.well-known/llms.txt" | "/.well-known/agent.json"
+        "/og.svg"
+            | "/badge.svg"
+            | "/widget.js"
+            | "/a8f4c2e91b7d40639e5a12c8f04b73d1.txt"
+            | "/feed.xml"
+            | "/rss.xml"
+            | "/sitemap.xml"
+            | "/robots.txt"
+            | "/llms.txt"
+            | "/.well-known/llms.txt"
+            | "/.well-known/agent.json"
     );
     let cache_hdr = if is_syndication {
         "public, max-age=60, stale-while-revalidate=300"

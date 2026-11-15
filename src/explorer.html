@@ -396,6 +396,18 @@
             <a id="ref-tg" target="_blank" rel="noopener" class="btn cyan">Telegram</a>
             <a id="ref-x" target="_blank" rel="noopener" class="btn">Post on X</a>
             <a id="ref-rd" target="_blank" rel="noopener" class="btn amber">Reddit</a>
+            <a id="ref-hn" target="_blank" rel="noopener" class="btn ghost">Hacker News</a>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
+            <label>Embed Live Network Badge on GitHub README or Blog (+10 AURA Referral Linked)</label>
+            <div class="row">
+              <input id="embed-md" class="mono" readonly style="flex:1;font-size:11.5px">
+              <button type="button" class="btn ghost" data-action="copy" data-target="embed-md">Copy Markdown</button>
+            </div>
+            <div class="row" style="margin-top:6px">
+              <input id="embed-html" class="mono" readonly style="flex:1;font-size:11.5px">
+              <button type="button" class="btn ghost" data-action="copy" data-target="embed-html">Copy Widget</button>
+            </div>
           </div>
         </section>
       </div>
@@ -441,6 +453,21 @@
         <button type="button" id="btn-mine-stop" class="btn ghost" data-action="mine-stop" disabled>Stop</button>
       </div>
       <div id="mine-out"></div>
+      <div id="mine-share-bar" class="toast ok" style="display:none;margin-top:12px">
+        <div style="font-weight:700;margin-bottom:4px">🎉 Proof-of-Work Minted! Share Your Invite Link &amp; Earn +10 AURA Automatically</div>
+        <div class="sub" style="margin:0 0 8px">Every friend who mines 1 browser share via your link earns <b>55 AURA</b> (+5 bonus) and consensus mints <b>+10.000000 AURA</b> directly to your wallet:</div>
+        <div class="row" style="margin-bottom:8px">
+          <input id="mine-ref-link" class="mono" readonly style="flex:1">
+          <button type="button" class="btn cyan" data-action="copy" data-target="mine-ref-link">Copy Invite Link</button>
+        </div>
+        <div class="row">
+          <a id="mine-share-x" target="_blank" rel="noopener" class="btn">Post on X</a>
+          <a id="mine-share-hn" target="_blank" rel="noopener" class="btn ghost">Hacker News</a>
+          <a id="mine-share-rd" target="_blank" rel="noopener" class="btn amber">Reddit</a>
+          <a id="mine-share-wa" target="_blank" rel="noopener" class="btn green">WhatsApp</a>
+          <a id="mine-share-tg" target="_blank" rel="noopener" class="btn cyan">Telegram</a>
+        </div>
+      </div>
       <div class="log" id="mine-log" style="margin-top:12px">Ready. Click "⚡ Mine 1 Share" to compute a real SHA3-256 PoW proof in your browser.</div>
     </section>
   </div>
@@ -1271,6 +1298,7 @@ async function startMining(continuous) {
       await submitSignedTx("powmine", "", 0, payload, "mine-out", true);
       sessionWon++;
       $("m-won").textContent = sessionWon;
+      $("mine-share-bar").style.display = "block";
       addLog(`🎉 Minted +${rewAmt} AURA to ${wallet.address}!`);
       if (!autoMine) break;
       await new Promise(r => setTimeout(r, 12000));
@@ -1376,23 +1404,31 @@ function setupShare() {
   const base = location.origin;
   const refUrl = `${base}/?ref=${wallet.address}`;
   $("ref-link").value = refUrl;
-  const text = "Join me on AuraChain Quantum (Post-Quantum NIST FIPS 204 ML-DSA-44 L1) — click to mine +55 free AURA in your browser in 1 second & claim your @name.aura identity:";
+  $("mine-ref-link").value = refUrl;
+  const text = "Join me on AuraChain Quantum (Post-Quantum NIST FIPS 204 ML-DSA-44 L1 in Rust) — click to mine +55 free AURA in your browser in 1 second & claim your @name.aura identity:";
+  const minedText = "Just mined Post-Quantum AURA in my browser on AuraChain Quantum (NIST FIPS 204 ML-DSA-44 + SHA3-256 L1 in Rust)! Click to mine +55 AURA free (+5 bonus):";
+  const hnTitle = "Show HN: AuraChain Quantum – Post-Quantum (NIST FIPS 204 ML-DSA-44) L1 in Rust with Browser SHA3 Miner";
   $("ref-wa").href = `https://wa.me/?text=${encodeURIComponent(text + " " + refUrl)}`;
   $("ref-tg").href = `https://t.me/share/url?url=${encodeURIComponent(refUrl)}&text=${encodeURIComponent(text)}`;
   $("ref-x").href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(refUrl)}`;
-  $("ref-rd").href = `https://www.reddit.com/submit?url=${encodeURIComponent(refUrl)}&title=${encodeURIComponent("AuraChain Quantum v1.1 – Post-Quantum (NIST FIPS 204 ML-DSA) L1 with Browser SHA3 Mining & Town Square")}`;
+  $("ref-rd").href = `https://www.reddit.com/submit?url=${encodeURIComponent(refUrl)}&title=${encodeURIComponent("AuraChain Quantum v1.3 – Post-Quantum (NIST FIPS 204 ML-DSA-44) L1 in Rust with Browser SHA3 Mining")}`;
+  $("ref-hn").href = `https://news.ycombinator.com/submitlink?u=${encodeURIComponent(refUrl)}&t=${encodeURIComponent(hnTitle)}`;
+  $("mine-share-x").href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(minedText)}&url=${encodeURIComponent(refUrl)}`;
+  $("mine-share-hn").href = $("ref-hn").href;
+  $("mine-share-rd").href = $("ref-rd").href;
+  $("mine-share-wa").href = `https://wa.me/?text=${encodeURIComponent(minedText + " " + refUrl)}`;
+  $("mine-share-tg").href = `https://t.me/share/url?url=${encodeURIComponent(refUrl)}&text=${encodeURIComponent(minedText)}`;
+  $("embed-md").value = `[![AuraChain Quantum](${base}/badge.svg)](${refUrl})`;
+  $("embed-html").value = `<script src="${base}/widget.js" data-ref="${wallet.address}" defer><\/script>`;
   $("peer-cmd").textContent =
-`# 1. Generate a Post-Quantum (ML-DSA-44 + Ed25519) validator keypair
+`# Option A: 1-Command Sovereign Docker Peer Node (GitHub Container Registry)
+docker run -p 7001:7001 -v aura-data:/data ghcr.io/sanzaya-p/aurachain:latest
+
+# Option B: Native Rust CLI Wallet, Miner & Full Verifying Peer Node
 aurachain keygen --out my-quantum-wallet.json
-
-# 2. Claim 50 AURA via permissionless SHA3-256 PoW share
 aurachain pow-claim --key my-quantum-wallet.json --node ${base}
-
-# 3. Claim your @name.aura identity & post on the Town Square
 aurachain claim-name --key my-quantum-wallet.json --handle myname --node ${base}
 aurachain post --key my-quantum-wallet.json --message "Running a sovereign peer node!" --node ${base}
-
-# 4. Sync & run a local full verifying peer node connected to the live network
 aurachain node --port 7001 --data ./aura-data --key my-quantum-wallet.json --peer ${base}`;
 }
 

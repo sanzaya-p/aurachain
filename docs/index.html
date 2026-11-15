@@ -182,11 +182,23 @@
 
   <section class="card" style="margin-bottom:28px">
     <h3>🖥️ Run a Sovereign Verifying Rust Peer Node ($0.00)</h3>
-    <p style="margin-bottom:12px">Clone the MIT-licensed Rust repository, run the full cryptographic test suite, and sync every block from Genesis #0:</p>
-    <pre>git clone https://github.com/sanzaya-p/aurachain.git
+    <p style="margin-bottom:12px">Run our official prebuilt container from <strong>GitHub Container Registry</strong> in 1 command, or build from MIT-licensed Rust source and sync every block from Genesis #0:</p>
+    <pre># Instant 1-command Docker node (ghcr.io)
+docker run -p 7001:7001 -v aura-data:/data ghcr.io/sanzaya-p/aurachain:latest
+
+# Or compile natively from safe Rust source
+git clone https://github.com/sanzaya-p/aurachain.git
 cd aurachain
 cargo build --release
-./target/release/aurachain node --port 8333 --data ./node-data --peer https://aurachain-quantum.vercel.app</pre>
+./target/release/aurachain node --port 7001 --data ./node-data --peer https://aurachain-quantum.vercel.app</pre>
+  </section>
+
+  <section class="card" style="margin-bottom:28px">
+    <h3>🪄 Embed Live AuraChain Status &amp; +55 AURA Miner on Your Site or GitHub</h3>
+    <p style="margin-bottom:12px"><a href="https://aurachain-quantum.vercel.app/?ref=aura1q11ffd330c403eff29abdb3e7c86f5da654a3392a"><img src="https://aurachain-quantum.vercel.app/badge.svg" alt="AuraChain Quantum Live Status" style="vertical-align:middle"></a></p>
+    <pre>[![AuraChain Quantum](https://aurachain-quantum.vercel.app/badge.svg)](https://aurachain-quantum.vercel.app/?ref=YOUR_AURA1Q_ADDRESS)
+
+&lt;script src="https://aurachain-quantum.vercel.app/widget.js" data-ref="YOUR_AURA1Q_ADDRESS" defer&gt;&lt;/script&gt;</pre>
   </section>
 </main>
 
