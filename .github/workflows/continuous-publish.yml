@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -17,19 +18,13 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  publish:
-    name: Generate Live Network Digest & Deploy Portal
+  build:
+    name: Generate Live Network Digest & Upload Artifact
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Generate live AuraChain Quantum digest, RSS & sitemaps (+ optional social syndication)
         env:
@@ -43,13 +38,37 @@ jobs:
         run: python3 scripts/generate_digest.py
 
       - name: Setup GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload Launch Portal & Digest artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./docs
+          include-hidden-files: true
+
+  deploy:
+    name: Deploy Launch Portal & Digest to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Wait for GitHub Actions artifact index consistency
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for attempt in $(seq 1 15); do
+            FOUND=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq '[.artifacts[] | select(.name == "github-pages")] | length' || echo "0")
+            if [ "${FOUND}" -ge 1 ]; then
+              echo "Artifact 'github-pages' indexed in GitHub REST API on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Waiting for GitHub artifact index consistency (attempt ${attempt}/15)..."
+            sleep 3
+          done
+          echo "Warning: proceeding to deploy-pages after waiting 45s."
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
