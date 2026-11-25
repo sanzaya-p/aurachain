@@ -15,20 +15,23 @@ use std::time::Duration;
 
 const DEFAULT_NODE: &str = "https://aurachain-quantum.vercel.app";
 
-const HELP: &str = r#"AuraChain Quantum v1.3.0 — Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) Sovereign L1 + Rollup
+const HELP: &str = r#"AuraChain Quantum v2.0.0 — Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519) Sovereign L1 + Rollup
 
 USAGE:
-  aurachain keygen       --out <file.json>
-  aurachain address      --key <file.json>
-  aurachain node         --port <p> --data <dir> [--key <file.json> | --key-env <VAR>] [--mine] [--peer <url>]...
-  aurachain info         [--node <url>]
-  aurachain activity     [--node <url>]                               (live human wallets, Town Square, leaderboard & tx feed)
-  aurachain ecosystem    [--node <url>]
-  aurachain balance      <address> [--node <url>]
-  aurachain pow-claim    --key <file.json> [--ref <aura1q...>] [--node <url>]  (0-fee SHA3-256 PoW mining; +55 AURA w/ ref)
-  aurachain claim-name   --key <file> --handle <name> [--node <url>]  (claim @name.aura Quantum identity)
-  aurachain post         --key <file> --message <text> [--to <aura1q...> --amount <AURA>] [--node <url>]
-  aurachain send         --key <file> --to <aura1q...> --amount <AURA> [--node <url>]
+  aurachain keygen        --out <file.json>
+  aurachain address       --key <file.json>
+  aurachain node          --port <p> --data <dir> [--key <file.json> | --key-env <VAR>] [--mine] [--peer <url>]...
+  aurachain info          [--node <url>]
+  aurachain activity      [--node <url>]                               (live human wallets, Town Square, leaderboard & tx feed)
+  aurachain ecosystem     [--node <url>]
+  aurachain balance       <address_or_@handle> [--node <url>]
+  aurachain pow-claim     --key <file.json> [--ref <aura1q...>] [--node <url>]  (0-fee SHA3-256 PoW mining; +55 AURA w/ ref)
+  aurachain claim-name    --key <file> --handle <name> [--node <url>]  (claim @name.aura Quantum identity)
+  aurachain post          --key <file> --message <text> [--to <aura1q_or_@handle> --amount <AURA>] [--node <url>]
+  aurachain notarize      --key <file> [--file <path> | --hash <sha3_hex>] --title <text> [--meta <text>] [--node <url>]
+  aurachain verify-notary <file_or_sha3_hex> [--node <url>]            (verify Post-Quantum SHA3-256 timestamp certificate)
+  aurachain attest        --key <file> [--node <url>]                  (co-sign latest Casper BFT checkpoint w/ staked AURA)
+  aurachain send          --key <file> --to <aura1q_or_@handle> --amount <AURA> [--node <url>]
   aurachain stake        --key <file> --amount <AURA> [--node <url>]
   aurachain unstake      --key <file> --amount <AURA> [--node <url>]
   aurachain delegate     --key <file> --to <validator_aura1q> [--node <url>]
@@ -422,6 +425,49 @@ fn main() {
             submit(&a, TxKind::SellToken, "", amt, &a.req("symbol"));
         }
         "anchor" => submit(&a, TxKind::Anchor, "", 0, &a.req("data")),
+        "notarize" => {
+            let doc_hash = if let Some(fp) = a.get("file") {
+                let bytes = std::fs::read(&fp).unwrap_or_else(|e| die(&format!("cannot read {fp}: {e}")));
+                crypto::sha3_256_hex(&bytes)
+            } else {
+                a.req("hash").trim().to_ascii_lowercase()
+            };
+            let title = a.req("title");
+            let meta = a.get("meta").unwrap_or_default();
+            let burn = match a.get("amount") {
+                Some(v) if !v.is_empty() => chain::parse_aura(&v).unwrap_or_else(|e| die(&e)),
+                _ => chain::NOTARY_BURN_MIN,
+            };
+            let payload = if meta.is_empty() {
+                format!("{doc_hash}|{title}")
+            } else {
+                format!("{doc_hash}|{title}|{meta}")
+            };
+            let node = a.node();
+            submit(&a, TxKind::Notarize, "", burn, &payload);
+            println!("Certificate URL: {node}/cert/{doc_hash}");
+        }
+        "verify-notary" => {
+            let arg = a.pos.get(1).cloned().unwrap_or_else(|| die("usage: verify-notary <file_or_sha3_hex>"));
+            let q = if arg.len() == 64 && arg.chars().all(|c| c.is_ascii_hexdigit()) {
+                arg.to_ascii_lowercase()
+            } else {
+                let bytes = std::fs::read(&arg).unwrap_or_else(|e| die(&format!("cannot read {arg}: {e}")));
+                crypto::sha3_256_hex(&bytes)
+            };
+            println!("SHA3-256: {q}");
+            println!("{}", serde_json::to_string_pretty(&http_get(&format!("{}/notary/{q}", a.node()))).unwrap());
+        }
+        "attest" => {
+            let node = a.node();
+            let info = http_get(&format!("{node}/info"));
+            let cp_h = info["finalized_height"].as_u64().unwrap_or(0);
+            let cp_hash = info["finalized_hash"].as_str().unwrap_or("").to_string();
+            if cp_h == 0 || cp_hash.is_empty() {
+                die("no finalized checkpoint available yet");
+            }
+            submit(&a, TxKind::Attest, "", 0, &format!("{cp_h}:{cp_hash}"));
+        }
         "l2" => l2_sequencer(&a),
         "bootstrap-seed" => bootstrap_seed(&a),
         _ => print!("{HELP}"),

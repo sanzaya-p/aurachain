@@ -220,6 +220,23 @@ fn sync_loop(ctx: Arc<Ctx>) {
             }
             let their: u128 = tip["chainwork"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0);
             if their <= my_work {
+                if let Some(kp) = &ctx.key {
+                    let mut n = ctx.node.lock().unwrap();
+                    let me = kp.address();
+                    let my_stake = n.state.account(&me).stake;
+                    let cp_h = n.state.finalized_height;
+                    let cp_hash = n.state.finalized_hash.clone();
+                    let already = n.state.checkpoint_cosigners.get(&cp_h).map(|v| v.contains(&me)).unwrap_or(false);
+                    if my_stake > 0 && cp_h > 0 && cp_h % 25 == 0 && !already && n.state.account(&me).balance >= n.state.next_base_fee * 2 {
+                        let nonce = n.next_nonce(&me);
+                        let fee = n.state.next_base_fee * 2;
+                        let tx = Tx::new(TxKind::Attest, kp, "", 0, fee, nonce, &format!("{cp_h}:{cp_hash}"));
+                        if n.add_tx(tx.clone()).is_ok() {
+                            drop(n);
+                            let _ = post_json(&format!("{p}/tx"), &serde_json::to_value(&tx).unwrap());
+                        }
+                    }
+                }
                 continue;
             }
             let from = my_height.saturating_sub(20);
@@ -415,6 +432,8 @@ fn info_json(ctx: &Ctx, n: &Node) -> Value {
         "accounts": s.accounts.len(),
         "names_count": s.names.len(),
         "messages_count": s.next_post_id,
+        "notarizations_count": s.next_notary_id,
+        "community_attestations": s.validator_attestations.values().sum::<u64>(),
         "referrals_count": s.referrals_count,
         "proposals_count": s.proposals.len(),
         "tokens_count": s.tokens.len(),
@@ -581,13 +600,56 @@ fn ecosystem_json(s: &State, height: u64) -> Value {
             })
         })
         .collect();
+    let notarizations: Vec<Value> = s
+        .notarizations
+        .iter()
+        .rev()
+        .take(50)
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "height": r.height,
+                "timestamp": r.timestamp,
+                "tx_id": r.tx_id,
+                "tx_index": r.tx_index,
+                "author": r.author,
+                "author_handle": s.address_names.get(&r.author),
+                "doc_hash": r.doc_hash,
+                "title": r.title,
+                "meta": r.meta,
+                "burned_aura": chain::fmt_aura(r.burned_aura),
+                "finalized": r.height <= s.finalized_height,
+                "cert_url": format!("/cert/{}", r.doc_hash),
+            })
+        })
+        .collect();
     json!({
         "proposals": proposals,
         "tokens": tokens,
         "nfts": nfts,
+        "notarizations": notarizations,
+        "validator_attestations": s.validator_attestations,
         "l2_batches": s.l2_batches.iter().rev().take(25).collect::<Vec<_>>(),
         "slashes": s.slash_history,
     })
+}
+
+fn percent_decode_simple(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 fn respond(req: tiny_http::Request, code: u16, body: String, ctype: &str) {
@@ -693,7 +755,9 @@ fn handle(ctx: &Arc<Ctx>, mut req: tiny_http::Request) {
         }
         ("GET", p) if p.starts_with("/account/") => {
             let n = ctx.node.lock().unwrap();
-            let a = &p[9..];
+            let raw_a = percent_decode_simple(&p[9..]);
+            let a_owned = n.state.resolve_address(&raw_a).unwrap_or(raw_a);
+            let a = a_owned.as_str();
             let acc = n.state.account(a);
             let tok_bals: serde_json::Map<String, Value> = n
                 .state
@@ -728,6 +792,72 @@ fn handle(ctx: &Arc<Ctx>, mut req: tiny_http::Request) {
         ("GET", "/mempool") => {
             let n = ctx.node.lock().unwrap();
             ok(serde_json::to_value(&n.mempool).unwrap())
+        }
+        ("GET", "/notary") => {
+            let n = ctx.node.lock().unwrap();
+            let items: Vec<Value> = n
+                .state
+                .notarizations
+                .iter()
+                .rev()
+                .take(50)
+                .map(|r| {
+                    json!({
+                        "id": r.id,
+                        "height": r.height,
+                        "timestamp": r.timestamp,
+                        "tx_id": r.tx_id,
+                        "author": r.author,
+                        "author_handle": n.state.address_names.get(&r.author),
+                        "doc_hash": r.doc_hash,
+                        "title": r.title,
+                        "meta": r.meta,
+                        "burned_aura": chain::fmt_aura(r.burned_aura),
+                        "finalized": r.height <= n.state.finalized_height,
+                    })
+                })
+                .collect();
+            ok(json!({ "count": n.state.next_notary_id, "notarizations": items }))
+        }
+        ("GET", p) if p.starts_with("/notary/") => {
+            let q_str = p[8..].trim().to_ascii_lowercase();
+            let n = ctx.node.lock().unwrap();
+            let found = n.state.notarizations.iter().rev().find(|r| {
+                r.doc_hash == q_str
+                    || r.tx_id.starts_with(&q_str)
+                    || q_str.parse::<u64>().map(|id| r.id == id).unwrap_or(false)
+            });
+            match found {
+                Some(r) => {
+                    let proof = n.blocks.get(r.height as usize).and_then(|b| {
+                        let steps = chain::merkle_proof(&b.txs, r.tx_index)?;
+                        let verified = chain::verify_merkle_proof(&r.tx_id, &steps, &b.header.tx_root);
+                        Some(json!({
+                            "block_hash": b.header.hash_hex(),
+                            "tx_root": b.header.tx_root,
+                            "steps": steps,
+                            "verified": verified,
+                        }))
+                    });
+                    ok(json!({
+                        "verified_on_chain": true,
+                        "id": r.id,
+                        "height": r.height,
+                        "timestamp": r.timestamp,
+                        "tx_id": r.tx_id,
+                        "tx_index": r.tx_index,
+                        "author": r.author,
+                        "author_handle": n.state.address_names.get(&r.author),
+                        "doc_hash": r.doc_hash,
+                        "title": r.title,
+                        "meta": r.meta,
+                        "burned_aura": chain::fmt_aura(r.burned_aura),
+                        "finalized": r.height <= n.state.finalized_height,
+                        "merkle_proof": proof,
+                    }))
+                }
+                None => (404, json!({ "verified_on_chain": false, "query": q_str, "error": "no notarization found for digest/id" })),
+            }
         }
         ("GET", "/anchors") => {
             let n = ctx.node.lock().unwrap();

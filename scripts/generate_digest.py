@@ -101,6 +101,7 @@ def build_digest_html(info: dict, activity: dict, eco: dict, now_utc: dt.datetim
     leaders = activity.get("leaderboard", [])[:12]
     tokens = eco.get("tokens", [])[:10]
     nfts = eco.get("nfts", [])[:10]
+    certs = eco.get("notarizations", [])[:10]
 
     msg_rows = ""
     if messages:
@@ -166,6 +167,19 @@ def build_digest_html(info: dict, activity: dict, eco: dict, now_utc: dt.datetim
         )
     if not nft_rows:
         nft_rows = "<tr><td colspan='4' class='mute'>No AUA NFTs minted yet — mint #1 on AuraChain Quantum!</td></tr>"
+
+    cert_rows = ""
+    for c in certs:
+        who = f"@{c['author_handle']}.aura" if c.get("author_handle") else f"{str(c.get('author', ''))[:16]}…"
+        dhash = str(c.get("doc_hash", ""))
+        cert_rows += (
+            f"<tr><td>#{esc(c.get('id'))} <strong>{esc(c.get('title'))}</strong></td>"
+            f"<td>{esc(who)}</td>"
+            f"<td><code>{esc(dhash[:16])}…</code></td>"
+            f"<td><a href='{NODE_URL}/cert/{esc(dhash)}'>Verify Certificate →</a></td></tr>\n"
+        )
+    if not cert_rows:
+        cert_rows = "<tr><td colspan='4' class='mute'>Stamp your first zero-upload SHA3-256 certificate on AuraChain Quantum!</td></tr>"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -281,6 +295,14 @@ def build_digest_html(info: dict, activity: dict, eco: dict, now_utc: dt.datetim
   </div>
 
   <section>
+    <h2>📜 Stamped Post-Quantum Certificates (NIST FIPS 204 ML-DSA-44 + SHA3-256)</h2>
+    <table>
+      <thead><tr><th>Certificate</th><th>Signer</th><th>SHA3-256 Digest</th><th>Verification</th></tr></thead>
+      <tbody>{cert_rows}</tbody>
+    </table>
+  </section>
+
+  <section>
     <h2>⚡ Recent Human &amp; Ecosystem Transactions</h2>
     <table>
       <thead><tr><th>Block</th><th>Kind</th><th>Summary</th><th>Timestamp</th></tr></thead>
@@ -358,6 +380,9 @@ def build_portal_sitemap(now_utc: dt.datetime) -> str:
   <url><loc>{PORTAL_URL}/rss.xml</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.8</priority></url>
   <url><loc>{PORTAL_URL}/llms.txt</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>0.8</priority></url>
   <url><loc>{NODE_URL}/</loc><lastmod>{ts}</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>
+  <url><loc>{NODE_URL}/cert/1</loc><lastmod>{ts}</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>{NODE_URL}/@sanzaya</loc><lastmod>{ts}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>{NODE_URL}/@aurachain</loc><lastmod>{ts}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>
 </urlset>
 """
 

@@ -37,6 +37,7 @@ pub const FINALITY_INTERVAL: u64 = 5; // BFT checkpoint every 5 blocks
 pub const UNBONDING_BLOCKS: u64 = 10; // Stake lockup period on unstake
 pub const SATURATION_DIVISOR: u64 = 4; // Max 25% lottery weight per validator pool
 pub const MIN_BASE_FEE: u64 = 1_000; // 0.001 AURA
+pub const NOTARY_BURN_MIN: u64 = COIN; // 1.000000 AURA deflationary burn per PQ notarization
 pub const TARGET_TXS_PER_BLOCK: u64 = 50;
 pub const MAX_TXS_PER_BLOCK: usize = 100;
 pub const MAX_FUTURE_SECS: u64 = 60;
@@ -103,6 +104,7 @@ pub enum TxKind {
     BuyNft,
     ClaimName,
     PostMessage,
+    Notarize,
     Anchor,
     Attest,
 }
@@ -126,6 +128,7 @@ impl TxKind {
             TxKind::BuyNft => "buynft",
             TxKind::ClaimName => "claimname",
             TxKind::PostMessage => "postmessage",
+            TxKind::Notarize => "notarize",
             TxKind::Anchor => "anchor",
             TxKind::Attest => "attest",
         }
@@ -468,6 +471,21 @@ pub struct SocialPost {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct NotaryRecord {
+    pub id: u64,
+    pub height: u64,
+    pub timestamp: u64,
+    pub tx_id: String,
+    pub tx_index: usize,
+    pub author: String,
+    pub doc_hash: String,
+    pub title: String,
+    #[serde(default)]
+    pub meta: String,
+    pub burned_aura: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ActivityEvent {
     pub height: u64,
     pub timestamp: u64,
@@ -538,6 +556,14 @@ pub struct State {
     #[serde(default)]
     pub messages: Vec<SocialPost>,
     #[serde(default)]
+    pub next_notary_id: u64,
+    #[serde(default)]
+    pub notarizations: Vec<NotaryRecord>,
+    #[serde(default)]
+    pub checkpoint_cosigners: BTreeMap<u64, BTreeSet<String>>,
+    #[serde(default)]
+    pub validator_attestations: BTreeMap<String, u64>,
+    #[serde(default)]
     pub referrals_count: u64,
     #[serde(default)]
     pub total_txs: u64,
@@ -572,6 +598,10 @@ impl State {
             address_names: BTreeMap::new(),
             next_post_id: 0,
             messages: vec![],
+            next_notary_id: 0,
+            notarizations: vec![],
+            checkpoint_cosigners: BTreeMap::new(),
+            validator_attestations: BTreeMap::new(),
             referrals_count: 0,
             total_txs: 0,
             tx_counts: BTreeMap::new(),
@@ -579,9 +609,21 @@ impl State {
         }
     }
 
+    pub fn resolve_address(&self, raw: &str) -> Result<String, String> {
+        let t = raw.trim();
+        if crypto::is_valid_address(t) {
+            return Ok(t.to_string());
+        }
+        let h = normalize_handle(t).map_err(|_| "invalid quantum address or @handle.aura".to_string())?;
+        self.names
+            .get(&h)
+            .cloned()
+            .ok_or_else(|| format!("unknown quantum handle @{h}.aura"))
+    }
+
     /// Deterministic SHA3-256 commitment over the entire L1 + ecosystem state.
     pub fn root(&self) -> String {
-        let v = if self.names.is_empty() && self.next_post_id == 0 {
+        let v = if self.names.is_empty() && self.next_post_id == 0 && self.next_notary_id == 0 {
             serde_json::json!({
                 "accounts": self.accounts,
                 "minted": self.minted,
@@ -592,6 +634,20 @@ impl State {
                 "tokens": self.tokens,
                 "nfts": self.nfts,
                 "l2_count": self.l2_batches.len(),
+            })
+        } else if self.next_notary_id == 0 {
+            serde_json::json!({
+                "accounts": self.accounts,
+                "minted": self.minted,
+                "burned": self.burned,
+                "finalized_height": self.finalized_height,
+                "slashed": self.slashed,
+                "proposals": self.proposals,
+                "tokens": self.tokens,
+                "nfts": self.nfts,
+                "l2_count": self.l2_batches.len(),
+                "names": self.names,
+                "posts_count": self.next_post_id,
             })
         } else {
             serde_json::json!({
@@ -606,6 +662,8 @@ impl State {
                 "l2_count": self.l2_batches.len(),
                 "names": self.names,
                 "posts_count": self.next_post_id,
+                "notary_count": self.next_notary_id,
+                "notary_tip": self.notarizations.last().map(|r| &r.doc_hash),
             })
         };
         sha3_256_hex(&serde_json::to_vec(&v).unwrap())
@@ -721,9 +779,7 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
 
     match tx.kind {
         TxKind::Transfer => {
-            if !crypto::is_valid_address(&tx.to) {
-                return Err("invalid quantum recipient address (must start with aura1q)".into());
-            }
+            let dest = s.resolve_address(&tx.to)?;
             if tx.amount == 0 {
                 return Err("amount must be > 0".into());
             }
@@ -732,7 +788,7 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
             acct.balance -= cost;
             acct.nonce += 1;
             s.accounts.insert(from.clone(), acct);
-            s.accounts.entry(tx.to.clone()).or_default().balance += tx.amount;
+            s.accounts.entry(dest).or_default().balance += tx.amount;
         }
 
         TxKind::Stake => {
@@ -1144,12 +1200,12 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
             }
             let total_cost = tx.amount.checked_add(tx.fee).ok_or("overflow")?;
             need(&acct, total_cost)?;
+            let mut resolved_tip_to = String::new();
             if !tx.to.is_empty() {
-                if !crypto::is_valid_address(&tx.to) {
-                    return Err("invalid tip recipient quantum address".into());
-                }
+                let dest = s.resolve_address(&tx.to)?;
+                resolved_tip_to = dest.clone();
                 if tx.amount > 0 {
-                    s.accounts.entry(tx.to.clone()).or_default().balance += tx.amount;
+                    s.accounts.entry(dest).or_default().balance += tx.amount;
                 }
             } else if tx.amount > 0 {
                 s.burned += tx.amount;
@@ -1166,10 +1222,52 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
                 author: from,
                 message: msg.to_string(),
                 tip_aura: tx.amount,
-                tip_to: tx.to.clone(),
+                tip_to: resolved_tip_to,
             });
             if s.messages.len() > 80 {
                 s.messages.remove(0);
+            }
+        }
+
+        TxKind::Notarize => {
+            if tx.amount < NOTARY_BURN_MIN {
+                return Err(format!("notarize requires burning at least {} AURA", fmt_aura(NOTARY_BURN_MIN)));
+            }
+            let mut parts = tx.data.splitn(3, '|');
+            let hash_raw = parts.next().unwrap_or("").trim().to_ascii_lowercase();
+            let title_raw = parts.next().unwrap_or("").trim();
+            let meta_raw = parts.next().unwrap_or("").trim();
+            if hash_raw.len() != 64 || !hash_raw.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err("notarize requires a 64-character hex SHA3-256 digest (<sha3_hex>|<title>[|<meta>])".into());
+            }
+            if title_raw.is_empty() || title_raw.chars().count() > 120 || title_raw.chars().any(|c| c.is_control()) {
+                return Err("notarize title must be 1..120 printable characters".into());
+            }
+            if meta_raw.chars().count() > 240 || meta_raw.chars().any(|c| c.is_control()) {
+                return Err("notarize metadata must be <= 240 printable characters".into());
+            }
+            let total_cost = tx.amount.checked_add(tx.fee).ok_or("overflow")?;
+            need(&acct, total_cost)?;
+            acct.balance -= total_cost;
+            acct.nonce += 1;
+            s.burned += tx.amount;
+            s.accounts.insert(from.clone(), acct);
+            let id = s.next_notary_id + 1;
+            s.next_notary_id = id;
+            s.notarizations.push(NotaryRecord {
+                id,
+                height: block_height,
+                timestamp: 0,
+                tx_id: tx.id(),
+                tx_index: 0,
+                author: from,
+                doc_hash: hash_raw,
+                title: title_raw.to_string(),
+                meta: meta_raw.to_string(),
+                burned_aura: tx.amount,
+            });
+            if s.notarizations.len() > 200 {
+                s.notarizations.remove(0);
             }
         }
 
@@ -1200,15 +1298,26 @@ pub fn apply_tx(s: &mut State, tx: &Tx, base_fee: u64, block_height: u64) -> Res
             }
             let (cp_s, cp_hash) = tx.data.split_once(':').ok_or("attest data must be <height>:<hash>")?;
             let cp_h: u64 = cp_s.parse().map_err(|_| "bad checkpoint height")?;
-            if cp_h % FINALITY_INTERVAL != 0 || cp_h >= block_height {
+            if cp_h == 0 || cp_h % FINALITY_INTERVAL != 0 || cp_h >= block_height {
                 return Err("invalid checkpoint height".into());
             }
-            if s.recent_hashes.get(&cp_h).map(|h| h.as_str()) != Some(cp_hash) {
+            let matches_canonical = s.recent_hashes.get(&cp_h).map(|h| h.as_str()) == Some(cp_hash)
+                || (cp_h == s.finalized_height && s.finalized_hash == cp_hash);
+            if !matches_canonical {
                 return Err("checkpoint hash does not match canonical chain".into());
+            }
+            if s.checkpoint_cosigners.get(&cp_h).map(|v| v.contains(&from)).unwrap_or(false) {
+                return Err("validator already co-signed this checkpoint".into());
             }
             acct.balance -= tx.fee;
             acct.nonce += 1;
             s.accounts.insert(from.clone(), acct);
+            s.checkpoint_cosigners.entry(cp_h).or_default().insert(from.clone());
+            while s.checkpoint_cosigners.len() > 32 {
+                let oldest = *s.checkpoint_cosigners.keys().next().unwrap();
+                s.checkpoint_cosigners.remove(&oldest);
+            }
+            *s.validator_attestations.entry(from.clone()).or_insert(0) += 1;
             record_checkpoint_vote(s, cp_h, cp_hash, &from);
         }
     }
@@ -1259,12 +1368,13 @@ fn describe_tx_event(s: &State, tx: &Tx, actor: &str) -> (String, u64, String) {
             }
         }
         TxKind::Transfer => {
+            let resolved = s.resolve_address(&tx.to).unwrap_or_else(|_| tx.to.clone());
             let to_disp = s
                 .address_names
-                .get(&tx.to)
+                .get(&resolved)
                 .map(|h| format!("@{h}.aura"))
-                .unwrap_or_else(|| format!("{}…", &tx.to[..12.min(tx.to.len())]));
-            (tx.to.clone(), tx.amount, format!("{who} sent {} AURA to {to_disp}", fmt_aura(tx.amount)))
+                .unwrap_or_else(|| format!("{}…", &resolved[..12.min(resolved.len())]));
+            (resolved, tx.amount, format!("{who} sent {} AURA to {to_disp}", fmt_aura(tx.amount)))
         }
         TxKind::ClaimName => {
             let h = normalize_handle(&tx.data).unwrap_or_else(|_| tx.data.clone());
@@ -1300,7 +1410,26 @@ fn describe_tx_event(s: &State, tx: &Tx, actor: &str) -> (String, u64, String) {
         }
         TxKind::Vote => (tx.data.clone(), 0, format!("{who} voted on DAO proposal ({})", tx.data)),
         TxKind::Slash => (String::new(), 0, format!("{who} slashed equivocating validator")),
-        TxKind::Anchor | TxKind::Attest => (String::new(), 0, String::new()),
+        TxKind::Notarize => {
+            let mut parts = tx.data.splitn(3, '|');
+            let dhash = parts.next().unwrap_or("").trim();
+            let title = parts.next().unwrap_or("Document").trim();
+            let short_h = &dhash[..12.min(dhash.len())];
+            (
+                dhash.to_string(),
+                tx.amount,
+                format!("{who} stamped Post-Quantum Certificate \"{title}\" (SHA3 {short_h}…)"),
+            )
+        }
+        TxKind::Attest => {
+            let cp = tx.data.split(':').next().unwrap_or("0");
+            (
+                cp.to_string(),
+                s.account(actor).stake,
+                format!("{who} co-signed Casper BFT checkpoint #{cp}"),
+            )
+        }
+        TxKind::Anchor => (String::new(), 0, String::new()),
     }
 }
 
@@ -1351,7 +1480,15 @@ fn execute(s: &State, prev_hash: &str, h: &Header, txs: &[Tx], target: u128) -> 
                 }
             }
         }
-        if tx.kind != TxKind::Anchor && tx.kind != TxKind::Attest {
+        if tx.kind == TxKind::Notarize {
+            if let Some(last_notary) = n.notarizations.last_mut() {
+                if last_notary.timestamp == 0 {
+                    last_notary.timestamp = h.timestamp;
+                    last_notary.tx_index = i;
+                }
+            }
+        }
+        if tx.kind != TxKind::Anchor {
             let actor = tx.sender().unwrap_or_default();
             let (target, amount, summary) = describe_tx_event(&n, tx, &actor);
             let tx_id = tx.id();
@@ -1712,5 +1849,37 @@ mod tests {
         assert_eq!(sim.account(&carol.address()).balance, 55 * COIN);
         assert_eq!(sim.account(&alice.address()).balance, alice_before_ref + 10 * COIN);
         assert_eq!(sim.referrals_count, 1);
+
+        // v2.0: Direct @handle.aura Transfer + Post-Quantum Document Notary + Community BFT Co-Signing!
+        let alice_bal_pre = sim.account(&alice.address()).balance;
+        let send_by_handle = Tx::new(TxKind::Transfer, &carol, "@alice.aura", 5 * COIN, MIN_BASE_FEE, 1, "");
+        apply_tx(&mut sim, &send_by_handle, MIN_BASE_FEE, 2).unwrap();
+        assert_eq!(sim.account(&alice.address()).balance, alice_bal_pre + 5 * COIN);
+
+        let doc_sha3 = sha3_256_hex(b"AuraChain v2.0 Quantum Architecture Specification");
+        let burned_pre = sim.burned;
+        let notarize_tx = Tx::new(
+            TxKind::Notarize,
+            &carol,
+            "",
+            NOTARY_BURN_MIN,
+            MIN_BASE_FEE,
+            2,
+            &format!("{doc_sha3}|AuraChain v2.0 Spec|application/pdf;size=4096"),
+        );
+        apply_tx(&mut sim, &notarize_tx, MIN_BASE_FEE, 2).unwrap();
+        assert_eq!(sim.next_notary_id, 1);
+        assert_eq!(sim.notarizations[0].doc_hash, doc_sha3);
+        assert_eq!(sim.burned, burned_pre + NOTARY_BURN_MIN);
+
+        // Community validator stakes & co-signs checkpoint #5
+        let carol_stake = Tx::new(TxKind::Stake, &carol, "", 15 * COIN, MIN_BASE_FEE, 3, "");
+        apply_tx(&mut sim, &carol_stake, MIN_BASE_FEE, 6).unwrap();
+        let cp5_hash = sha3_256_hex(b"checkpoint-5");
+        sim.recent_hashes.insert(5, cp5_hash.clone());
+        let carol_attest = Tx::new(TxKind::Attest, &carol, "", 0, MIN_BASE_FEE, 4, &format!("5:{cp5_hash}"));
+        apply_tx(&mut sim, &carol_attest, MIN_BASE_FEE, 6).unwrap();
+        assert_eq!(sim.validator_attestations.get(&carol.address()), Some(&1));
+        assert!(sim.checkpoint_cosigners[&5].contains(&carol.address()));
     }
 }

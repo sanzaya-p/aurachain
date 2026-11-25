@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AuraChain Quantum v1.2 — Post-Quantum L1, Free Browser Miner, Town Square, DEX &amp; DAO</title>
-<meta name="description" content="AuraChain Quantum v1.2: Autonomous Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256) Fair-Launch PoW to VPoS Layer-1 Blockchain. Mine 50–55 AURA free in your browser, claim @name.aura identities, post on Quantum Town Square, send 1-click AURA Gift Links, and trade on AuraLaunch DEX.">
+<title>AuraChain Quantum v2.0 — Post-Quantum L1, File Notary, .aura Profiles, Browser Miner &amp; DEX</title>
+<meta name="description" content="AuraChain Quantum v2.0: Autonomous Post-Quantum (NIST FIPS 204 ML-DSA-44 + Ed25519 + SHA3-256) Layer-1 Blockchain. Mine 50–55 AURA free in browser, stamp Post-Quantum SHA3-256 File Certificates, claim @name.aura profile pages, co-sign Casper BFT checkpoints, and trade on AuraLaunch DEX.">
 <meta name="keywords" content="post-quantum blockchain, ML-DSA-44, FIPS 204, Rust blockchain, browser crypto miner, SHA3-256 PoW, Proof of Stake, AuraChain Quantum, free cryptocurrency faucet miner, WebCrypto blockchain">
 <link rel="canonical" href="https://aurachain-quantum.vercel.app/">
 <link rel="alternate" type="application/rss+xml" title="AuraChain Quantum Live On-Chain Syndication Feed" href="/feed.xml">
@@ -86,6 +86,22 @@
     box-shadow:0 0 30px #10b98133; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
   }
   .gift-banner.show { display:flex; }
+  .quest-bar {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px;
+    margin-bottom:18px; padding:12px 14px; border-radius:13px;
+    background:linear-gradient(90deg, #11182b, #14122b); border:1px solid #2b3a63;
+  }
+  .quest-step {
+    display:flex; align-items:center; gap:9px; padding:8px 11px; border-radius:9px;
+    background:#0b1120; border:1px solid #1f2d4d; cursor:pointer; font-size:12.3px; transition:.15s;
+  }
+  .quest-step:hover { border-color:var(--cyan); }
+  .quest-step.done { border-color:#10b98188; background:#09221c; color:#a7f3d0; }
+  .dropzone {
+    border:1.5px dashed #22d3ee88; border-radius:12px; padding:18px; text-align:center;
+    background:#091020; cursor:pointer; transition:.15s;
+  }
+  .dropzone:hover { border-color:var(--pos); background:#0b162b; }
 
   nav.tabs {
     display:flex; gap:5px; padding:12px 24px 0; border-bottom:1px solid var(--line);
@@ -232,17 +248,49 @@
   </div>
 </div>
 
+<!-- SDK Checkout / Post-Quantum Sign-In Modal Banner -->
+<div id="sdk-banner" class="gift-banner" style="background:linear-gradient(135deg,#1e1b4b,#0c4a6e);border-color:#22d3eeaa">
+  <div>
+    <div id="sdk-title" style="font-weight:800;font-size:15px;color:#67e8f9">⚡ Post-Quantum SDK Request</div>
+    <div class="sub" id="sdk-desc" style="color:#e0f2fe;margin-top:2px"></div>
+  </div>
+  <div class="row">
+    <button type="button" id="btn-sdk-approve" class="btn green" data-action="sdk-approve">🛡️ Sign w/ ML-DSA-44 &amp; Approve</button>
+    <button type="button" class="btn ghost" data-action="sdk-cancel">Cancel</button>
+  </div>
+</div>
+
 <nav class="tabs">
-  <button type="button" class="active" data-tab="explorer">⛓️ Explorer & Finality</button>
-  <button type="button" data-tab="community">👥 Live Users, Town Square & Invite</button>
+  <button type="button" class="active" data-tab="explorer">⛓️ Explorer &amp; Finality</button>
+  <button type="button" data-tab="community">👥 Town Square &amp; .aura IDs</button>
+  <button type="button" data-tab="notary">📜 PQ File Notary</button>
   <button type="button" data-tab="miner">⛏️ Browser SHA3 Miner</button>
-  <button type="button" data-tab="wallet">🔐 Quantum Wallet & Staking</button>
-  <button type="button" data-tab="dex">🚀 Token DEX & Royalty NFTs</button>
-  <button type="button" data-tab="dao">🏛️ DAO & L2 Metropolis</button>
-  <button type="button" data-tab="docs">📜 Whitepaper & Node</button>
+  <button type="button" data-tab="wallet">🔐 Wallet, Staking &amp; BFT</button>
+  <button type="button" data-tab="dex">🚀 Token DEX &amp; NFTs</button>
+  <button type="button" data-tab="dao">🏛️ DAO &amp; L2 Metropolis</button>
+  <button type="button" data-tab="docs">🔌 SDK, MCP &amp; Node</button>
 </nav>
 
 <main>
+  <!-- 4-Step Pioneer Onboarding Quest -->
+  <div class="quest-bar" id="quest-bar">
+    <div class="quest-step" id="q-step-1" data-tab="miner">
+      <span id="q-ico-1">1️⃣</span>
+      <div><b>Mine Free 50 AURA</b><div class="sub" style="font-size:10.5px">Zero-fee SHA3-256 browser PoW</div></div>
+    </div>
+    <div class="quest-step" id="q-step-2" data-tab="community">
+      <span id="q-ico-2">2️⃣</span>
+      <div><b>Claim @name.aura</b><div class="sub" style="font-size:10.5px" id="q-sub-2">Get your /@handle profile &amp; tip page</div></div>
+    </div>
+    <div class="quest-step" id="q-step-3" data-tab="notary">
+      <span id="q-ico-3">3️⃣</span>
+      <div><b>Stamp PQ Certificate</b><div class="sub" style="font-size:10.5px">Notarize any file w/ ML-DSA-44</div></div>
+    </div>
+    <div class="quest-step" id="q-step-4" data-tab="wallet">
+      <span id="q-ico-4">4️⃣</span>
+      <div><b>Stake &amp; Co-Sign BFT</b><div class="sub" style="font-size:10.5px">Secure Casper ⅔ checkpoints</div></div>
+    </div>
+  </div>
   <!-- ==================== TAB 1: EXPLORER ==================== -->
   <div id="tab-explorer" class="tabpane active">
     <div class="cards">
@@ -429,6 +477,65 @@
     </div>
   </div>
 
+  <!-- ==================== TAB 2B: POST-QUANTUM FILE NOTARY ==================== -->
+  <div id="tab-notary" class="tabpane">
+    <div class="grid2">
+      <section>
+        <h2>
+          <span>📜 Post-Quantum File, Code &amp; AI-Output Notary</span>
+          <span class="badge-pq">0 Bytes Uploaded · NIST FIPS 204 ML-DSA-44</span>
+        </h2>
+        <p class="sub" style="margin-top:0">
+          Prove authorship and exact existence of any PDF contract, git release, research dataset, artwork, or AI output against quantum forgery. Your file is hashed <b>100% locally in your browser</b> with <code>SHA3-256</code> and anchored permanently on L1 with a shareable <code>/cert/&lt;sha3&gt;</code> certificate!
+        </p>
+
+        <div class="dropzone" id="notary-drop" data-action="pick-notary-file">
+          <div style="font-weight:700;color:var(--cyan);font-size:14px">📂 Click or Drop Any File Here to Compute SHA3-256 Locally</div>
+          <div class="sub" id="notary-file-info" style="margin-top:4px">File never leaves your device — only its 32-byte SHA3-256 fingerprint goes on-chain.</div>
+          <input type="file" id="notary-file" style="display:none">
+        </div>
+
+        <label>SHA3-256 Document Digest (64 hex — auto-filled from file or type text below)</label>
+        <div class="row">
+          <input id="notary-hash" class="mono" placeholder="64-character SHA3-256 hex digest…" style="flex:1">
+          <button type="button" class="btn ghost" data-action="hash-text-prompt">Hash Text</button>
+        </div>
+
+        <label>Certificate Title (Publicly shown on /cert/&lt;hash&gt;)</label>
+        <input id="notary-title" maxlength="120" placeholder="e.g. Q4 Architecture Spec v2.0.pdf or Commit 0cb07b8">
+
+        <label>Optional Metadata (MIME, size, repo URL, or author note)</label>
+        <input id="notary-meta" maxlength="240" placeholder="e.g. application/pdf · 248 KB · MIT License">
+
+        <div class="row" style="margin-top:12px">
+          <button type="button" class="btn green" data-action="notarize-doc">🛡️ Sign (ML-DSA-44) &amp; Stamp Certificate (Burns 1 AURA)</button>
+          <button type="button" class="btn ghost" data-tab="miner">Need 1 AURA? Mine 50 Free →</button>
+        </div>
+        <div id="notary-out"></div>
+      </section>
+
+      <div style="display:grid;gap:18px;align-content:start">
+        <section>
+          <h2>🔍 Verify File or SHA3-256 Certificate</h2>
+          <p class="sub" style="margin-top:0">Enter a 64-hex SHA3-256 digest or Certificate ID to verify its on-chain timestamp and Merkle inclusion proof:</p>
+          <div class="row">
+            <input id="notary-verify-q" class="mono" placeholder="SHA3-256 hex or Certificate ID (e.g. 1)" style="flex:1">
+            <button type="button" class="btn cyan" data-action="verify-notary">Verify</button>
+          </div>
+          <div id="notary-verify-out" style="margin-top:10px"></div>
+        </section>
+
+        <section>
+          <h2>⛓️ Latest Stamped Post-Quantum Certificates</h2>
+          <table>
+            <thead><tr><th>#</th><th>Title</th><th>By</th><th>SHA3-256</th><th>Certificate</th></tr></thead>
+            <tbody id="notary-rows"></tbody>
+          </table>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== TAB 3: BROWSER POW MINER ==================== -->
   <div id="tab-miner" class="tabpane">
     <section>
@@ -516,20 +623,23 @@
 
       <div style="display:grid;gap:18px;align-content:start">
         <section>
-          <h2>Transfer AURA (Hybrid PQ-Signed)</h2>
-          <label>Recipient Quantum Address (aura1q…)</label>
-          <input id="tx-to" class="mono" placeholder="aura1q…">
+          <h2>Transfer AURA (Supports @handle.aura or aura1q…)</h2>
+          <label>Recipient (@handle.aura or Quantum Address aura1q…)</label>
+          <input id="tx-to" class="mono" placeholder="@sanzaya.aura or aura1q…">
           <label>Amount (AURA)</label>
           <input id="tx-amt" type="number" step="0.001" value="5">
           <div class="row" style="margin-top:12px">
-            <button type="button" class="btn" data-action="transfer">Sign (ML-DSA-44 + Ed25519) & Send</button>
+            <button type="button" class="btn" data-action="transfer">Sign (ML-DSA-44 + Ed25519) &amp; Send</button>
             <button type="button" class="btn green" data-tab="miner">Need AURA? Mine Free in 1s →</button>
           </div>
           <div id="tx-out"></div>
         </section>
 
         <section>
-          <h2>VPoS Staking, Unbonding & Pool Delegation</h2>
+          <h2>
+            <span>VPoS Staking, Delegation &amp; BFT Co-Signing</span>
+            <span class="pill pos" id="bft-cosign-pill">Casper ⅔ Finality</span>
+          </h2>
           <div class="row">
             <div style="flex:1">
               <label>Stake / Unstake Amount (AURA)</label>
@@ -539,11 +649,12 @@
           <div class="row" style="margin-top:10px">
             <button type="button" class="btn green" data-action="stake">Stake AURA</button>
             <button type="button" class="btn amber" data-action="unstake">Unstake (10-blk lockup)</button>
+            <button type="button" class="btn cyan" data-action="attest-bft">🛡️ Co-Sign BFT Checkpoint</button>
           </div>
           <label style="margin-top:12px">Non-Custodial Pool Delegation (Validator aura1q…, empty = self)</label>
           <div class="row">
             <input id="del-to" class="mono" placeholder="aura1q… validator pool" style="flex:1">
-            <button type="button" class="btn cyan" data-action="delegate">Delegate Stake</button>
+            <button type="button" class="btn ghost" data-action="delegate">Delegate Stake</button>
           </div>
           <div id="stk-out"></div>
         </section>
@@ -705,6 +816,22 @@
             <a href="/llms.txt" target="_blank" rel="noopener" class="btn ghost">🤖 /llms.txt</a>
             <a href="https://github.com/sanzaya-p/aurachain/releases" target="_blank" rel="noopener" class="btn ghost">⬇️ CLI Releases</a>
           </div>
+        </section>
+
+        <section>
+          <h2>🔌 1-Line Web SDK (<code>/sdk.js</code>) &amp; AI Agent MCP Server</h2>
+          <p class="sub" style="margin-top:0">Accept Post-Quantum <code>AURA</code> payments, authenticate users with <code>ML-DSA-44</code> signatures, or connect Claude Code / Cursor / Antigravity agents:</p>
+          <pre class="code">&lt;!-- 1. Accept AURA Payments &amp; Post-Quantum Sign-In on Any Site --&gt;
+&lt;script src="https://aurachain-quantum.vercel.app/sdk.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  // Open non-custodial checkout popup:
+  await AuraChain.pay({ to: "@sanzaya.aura", amount: 5, memo: "Pro Access" });
+  // Passwordless NIST FIPS 204 ML-DSA-44 login:
+  const auth = await AuraChain.signChallenge({ domain: location.host });
+&lt;/script&gt;
+
+// 2. Connect AI Agents via Official MCP Server (mcp/aurachain_mcp.py)
+{ "mcpServers": { "aurachain": { "command": "python", "args": ["mcp/aurachain_mcp.py"] } } }</pre>
         </section>
 
         <section>
@@ -985,7 +1112,10 @@ async function refreshAll() {
     $("staked").textContent = `${fmt(i.total_staked)} AURA`;
     $("reward").textContent = `${fmt(i.block_reward)} AURA`;
     $("powrew-sub").textContent = `Browser PoW share: ${fmt(i.pow_claim_reward)} AURA`;
-    $("eco-counts").textContent = `${i.tokens_count} Tok · ${i.nfts_count} NFT · ${act.messages_count || 0} Posts`;
+    $("eco-counts").textContent = `${i.tokens_count} Tok · ${i.nfts_count} NFT · ${i.notarizations_count || 0} Cert`;
+    if ($("bft-cosign-pill")) {
+      $("bft-cosign-pill").textContent = `Casper ⅔ · ${i.community_attestations || 0} Co-Signs`;
+    }
     $("posh").textContent = i.pos_start_height;
     $("prog").style.width = Math.min(100, (100 * i.height) / i.pos_start_height) + "%";
     $("gen").textContent = `Genesis ${i.genesis_hash.slice(0, 24)}… — "${i.genesis_message}"`;
@@ -1036,13 +1166,17 @@ async function refreshAll() {
       lastRenderedHeight = i.height;
     }
 
-    // Wallet stats + Handle badge
+    // Wallet stats + Handle badge + 4-Step Pioneer Quest
     if (acct) {
       const myLabel = acct.handle ? `@${acct.handle}.aura` : `${wallet.address.slice(0, 10)}…`;
       $("hdr-wallet").textContent = `${myLabel} · ${fmt(acct.balance)} AURA`;
       $("w-bal").textContent = fmt(acct.balance);
-      $("w-handle-sub").textContent = acct.handle ? `@${acct.handle}.aura` : "AURA (claim @name.aura in Town Square!)";
-      $("my-handle-badge").textContent = acct.handle ? `✅ @${acct.handle}.aura` : "No @handle yet";
+      $("w-handle-sub").innerHTML = acct.handle
+        ? `<a href="/@${esc(acct.handle)}" target="_blank" rel="noopener" style="color:var(--cyan)">@${esc(acct.handle)}.aura ↗</a>`
+        : "AURA (claim @name.aura in Town Square!)";
+      $("my-handle-badge").innerHTML = acct.handle
+        ? `<a href="/@${esc(acct.handle)}" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none">✅ @${esc(acct.handle)}.aura (Open Profile ↗)</a>`
+        : "No @handle yet";
       $("w-stake").textContent = fmt(acct.stake);
       $("w-nonce").textContent = acct.next_nonce;
       $("w-del").textContent = acct.delegate ? `Delegated → ${short(acct.delegate, 10)}` : "Self-delegated";
@@ -1051,6 +1185,21 @@ async function refreshAll() {
       const tb = Object.entries(acct.token_balances || {}).map(([k, v]) => `${k}: ${fmt(v.balance)}`).join(" · ");
       const no = (acct.nfts_owned || []).length ? `NFTs owned: #${acct.nfts_owned.join(", #")}` : "";
       $("w-assets").textContent = [tb, no].filter(Boolean).join(" | ") || "No community tokens or NFTs held yet.";
+
+      // Update 4-Step Pioneer Onboarding Quest
+      const hasMined = (acct.balance_micro || 0) > 0 || (acct.nonce || 0) > 0;
+      const hasHandle = Boolean(acct.handle);
+      const hasCert = (eco.notarizations || []).some(n => n.author === wallet.address) || (act.messages || []).some(m => m.author === wallet.address);
+      const hasStaked = (acct.stake_micro || 0) > 0;
+      const setQuest = (idx, done) => {
+        $("q-step-" + idx).classList.toggle("done", done);
+        $("q-ico-" + idx).textContent = done ? "✅" : `${idx}️⃣`;
+      };
+      setQuest(1, hasMined);
+      setQuest(2, hasHandle);
+      if (hasHandle) $("q-sub-2").innerHTML = `<a href="/@${esc(acct.handle)}" target="_blank" rel="noopener" style="color:#6ee7b7">/@${esc(acct.handle)} live ↗</a>`;
+      setQuest(3, hasCert);
+      setQuest(4, hasStaked);
     }
 
     // Town Square Wall
@@ -1091,11 +1240,11 @@ async function refreshAll() {
     // Leaderboard
     $("leaderboard-rows").innerHTML = (act.leaderboard || []).map(r => {
       const ident = r.handle
-        ? `<b style="color:var(--cyan)">@${esc(r.handle)}.aura</b> <span class="sub mono">${short(r.address, 8)}</span>`
+        ? `<a href="/@${esc(r.handle)}" target="_blank" rel="noopener" style="color:var(--cyan);font-weight:700">@${esc(r.handle)}.aura ↗</a> <span class="sub mono">${short(r.address, 8)}</span>`
         : `<span class="mono">${short(r.address, 12)}</span>`;
       const role = r.is_genesis_validator
         ? `<span class="pill fin">Cloud Validator</span>`
-        : `<span class="pill usr">Human User</span>`;
+        : (Number(r.stake_aura) > 0 ? `<span class="pill pos">Staker (${r.attestations || 0} BFT)</span>` : `<span class="pill usr">Human User</span>`);
       return `<tr>
         <td><b>#${r.rank}</b></td>
         <td>${ident}</td>
@@ -1105,6 +1254,20 @@ async function refreshAll() {
         <td>${r.nonce}</td>
       </tr>`;
     }).join("");
+
+    // Ecosystem: Post-Quantum Notarizations
+    $("notary-rows").innerHTML = (eco.notarizations || []).length
+      ? eco.notarizations.map(n => {
+          const by = n.author_handle ? `<a href="/@${esc(n.author_handle)}" target="_blank" rel="noopener" style="color:var(--cyan)">@${esc(n.author_handle)}.aura</a>` : `<span class="mono">${short(n.author, 10)}</span>`;
+          return `<tr>
+            <td><b>#${n.id}</b></td>
+            <td>${esc(n.title)}</td>
+            <td>${by}</td>
+            <td class="mono">${esc(n.doc_hash.slice(0, 12))}…</td>
+            <td><a href="/cert/${esc(n.doc_hash)}" target="_blank" rel="noopener" class="btn ghost" style="padding:3px 9px;font-size:11px">📜 Open Cert ↗</a></td>
+          </tr>`;
+        }).join("")
+      : `<tr><td colspan="5" class="sub">No files notarized yet — stamp Certificate #1 on the left!</td></tr>`;
 
     // Ecosystem: DEX tokens
     $("dex-tokens").innerHTML = (eco.tokens || []).map(t => `
@@ -1397,6 +1560,63 @@ document.addEventListener("click", e => {
   else if (act === "propose") submitSignedTx("propose", "", 0, `${$("aip-title").value.trim()}|${$("aip-sum").value.trim()}`, "dao-out");
   else if (act === "vote") submitSignedTx("vote", "", 0, `${el.dataset.id}:${el.dataset.choice}`, "dao-out");
   else if (act === "anchor") submitSignedTx("anchor", "", 0, $("anc-data").value.trim(), "anc-out");
+  else if (act === "pick-notary-file") $("notary-file").click();
+  else if (act === "hash-text-prompt") {
+    const txt = prompt("Enter text, commit hash, or JSON to compute its SHA3-256 digest:");
+    if (txt !== null && txt.length > 0) {
+      $("notary-hash").value = toHex(sha3_256(enc(txt)));
+      if (!$("notary-title").value) $("notary-title").value = `Text Statement (${txt.length} chars)`;
+      $("notary-file-info").textContent = `Computed SHA3-256 of ${txt.length} UTF-8 chars locally.`;
+    }
+  }
+  else if (act === "notarize-doc") {
+    const h = $("notary-hash").value.trim().toLowerCase();
+    const title = $("notary-title").value.trim();
+    const meta = $("notary-meta").value.trim();
+    if (!/^[0-9a-f]{64}$/.test(h)) {
+      $("notary-out").innerHTML = `<div class="toast err">Drop a file or click "Hash Text" first to generate a 64-character SHA3-256 digest.</div>`;
+      return;
+    }
+    if (!title) {
+      $("notary-out").innerHTML = `<div class="toast err">Enter a Certificate Title (1..120 chars).</div>`;
+      return;
+    }
+    const payload = meta ? `${h}|${title}|${meta}` : `${h}|${title}`;
+    submitSignedTx("notarize", "", 1 * COIN, payload, "notary-out").then(() => {
+      const certUrl = `${location.origin}/cert/${h}`;
+      $("notary-out").innerHTML = `<div class="toast ok">✅ Post-Quantum Certificate Stamped! <a href="${esc(certUrl)}" target="_blank" rel="noopener" style="color:#fff;font-weight:800;text-decoration:underline">Open Shareable Certificate (/cert/${esc(h.slice(0, 12))}…) ↗</a></div>`;
+    }).catch(() => {});
+  }
+  else if (act === "verify-notary") {
+    const q = $("notary-verify-q").value.trim();
+    if (!q) return;
+    $("notary-verify-out").innerHTML = `<div class="toast">Querying on-chain Notary &amp; Merkle tree…</div>`;
+    fetch(`/notary/${encodeURIComponent(q)}`).then(r => r.json()).then(j => {
+      if (!j.verified_on_chain) {
+        $("notary-verify-out").innerHTML = `<div class="toast err">❌ Not found on-chain yet.</div>`;
+      } else {
+        const mp = j.merkle_proof && j.merkle_proof.verified ? " · SHA3 Merkle Proof Verified ✅" : "";
+        $("notary-verify-out").innerHTML = `<div class="toast ok">🛡️ <b>Certificate #${j.id}: ${esc(j.title)}</b><br>Block #${j.height}${mp}<br><a href="/cert/${esc(j.doc_hash)}" target="_blank" rel="noopener" style="color:var(--cyan);font-weight:700">Open Full Certificate Page ↗</a></div>`;
+      }
+    }).catch(err => {
+      $("notary-verify-out").innerHTML = `<div class="toast err">${esc(err.message || err)}</div>`;
+    });
+  }
+  else if (act === "attest-bft") {
+    apiGet("/info").then(inf => {
+      if (!inf.finalized_height || !inf.finalized_hash) throw new Error("No checkpoint ready yet");
+      return submitSignedTx("attest", "", 0, `${inf.finalized_height}:${inf.finalized_hash}`, "stk-out");
+    }).catch(err => {
+      $("stk-out").innerHTML = `<div class="toast err">❌ ${esc(err.message || err)} (Stake AURA first to co-sign BFT checkpoints!)</div>`;
+    });
+  }
+  else if (act === "sdk-approve") handleSdkApprove();
+  else if (act === "sdk-cancel") {
+    $("sdk-banner").classList.remove("show");
+    if (sdkCtx && window.opener) {
+      window.opener.postMessage({ source: "aurachain-quantum-sdk", reqId: sdkCtx.reqId, error: "User cancelled" }, "*");
+    }
+  }
 });
 
 // ---------------- Referral Share & Node Commands ----------------
@@ -1432,8 +1652,100 @@ aurachain post --key my-quantum-wallet.json --message "Running a sovereign peer 
 aurachain node --port 7001 --data ./aura-data --key my-quantum-wallet.json --peer ${base}`;
 }
 
+// ---------------- Local Zero-Upload File Hashing & SDK / Deep-Link Handler ----------------
+let sdkCtx = null;
+
+async function hashNotaryFile(file) {
+  if (!file) return;
+  $("notary-file-info").textContent = `Computing SHA3-256 of "${file.name}" (${file.size.toLocaleString()} bytes)…`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const digest = toHex(sha3_256(bytes));
+  $("notary-hash").value = digest;
+  if (!$("notary-title").value) $("notary-title").value = file.name;
+  $("notary-meta").value = `${file.type || "application/octet-stream"} · ${file.size.toLocaleString()} bytes`;
+  $("notary-file-info").innerHTML = `✅ Local SHA3-256 ready (<span class="mono">${digest.slice(0, 18)}…</span>) — 0 bytes uploaded.`;
+}
+
+$("notary-file").addEventListener("change", e => hashNotaryFile(e.target.files[0]));
+$("notary-drop").addEventListener("dragover", e => { e.preventDefault(); });
+$("notary-drop").addEventListener("drop", e => {
+  e.preventDefault();
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) hashNotaryFile(e.dataTransfer.files[0]);
+});
+
+function initDeepLinksAndSdk() {
+  const p = new URLSearchParams(location.search);
+  const tab = p.get("tab");
+  if (tab && $(`tab-${tab}`)) switchTab(tab);
+  const claim = p.get("claim");
+  if (claim) {
+    switchTab("community");
+    $("claim-handle").value = claim;
+  }
+  const sdkMode = p.get("sdk_mode");
+  const reqId = p.get("req_id") || "";
+  const payTo = p.get("pay_to") || "";
+  const payAmt = p.get("pay_amount") || "";
+  const payMemo = p.get("pay_memo") || "";
+  if (payTo) {
+    $("tx-to").value = payTo;
+    if (payAmt) $("tx-amt").value = payAmt;
+    switchTab("wallet");
+    sdkCtx = { mode: "pay", reqId, to: payTo, amount: payAmt || "5", memo: payMemo };
+    $("sdk-title").textContent = `💸 Pay ${sdkCtx.amount} AURA to ${payTo}`;
+    $("sdk-desc").textContent = payMemo ? `Memo: "${payMemo}" · Signed client-side with NIST FIPS 204 ML-DSA-44` : "Signed client-side with NIST FIPS 204 ML-DSA-44 + Ed25519";
+    $("sdk-banner").classList.add("show");
+  } else if (sdkMode === "sign") {
+    const domain = p.get("auth_domain") || "external-app";
+    const nonce = p.get("auth_nonce") || "";
+    sdkCtx = { mode: "sign", reqId, domain, nonce };
+    $("sdk-title").textContent = `🔐 Sign In with Post-Quantum Wallet (${domain})`;
+    $("sdk-desc").textContent = `Prove ownership of ${wallet.address.slice(0, 16)}… using NIST FIPS 204 ML-DSA-44 (zero gas, zero seed exposure).`;
+    $("sdk-banner").classList.add("show");
+  }
+}
+
+async function handleSdkApprove() {
+  if (!sdkCtx) return;
+  const btn = $("btn-sdk-approve");
+  btn.disabled = true;
+  try {
+    if (sdkCtx.mode === "pay") {
+      const micro = parseAuraMicro(sdkCtx.amount);
+      const j = await submitSignedTx("transfer", sdkCtx.to, micro, "", "tx-out");
+      $("sdk-desc").textContent = `✅ Payment confirmed! TXID: ${j.txid.slice(0, 20)}…`;
+      if (window.opener && sdkCtx.reqId) {
+        window.opener.postMessage({
+          source: "aurachain-quantum-sdk",
+          reqId: sdkCtx.reqId,
+          result: { txid: j.txid, from: wallet.address, to: sdkCtx.to, amount: sdkCtx.amount }
+        }, "*");
+      }
+      setTimeout(() => $("sdk-banner").classList.remove("show"), 3500);
+    } else if (sdkCtx.mode === "sign") {
+      const msg = `aurachain-auth-v1|${NETWORK}|${sdkCtx.domain}|${sdkCtx.nonce}|${Math.floor(Date.now() / 1000)}`;
+      const msgBytes = enc(msg);
+      const sigHex = toHex(concatBytes(ed25519.sign(msgBytes, wallet.edSeed), ml_dsa44.sign(msgBytes, wallet.pqSk)));
+      $("sdk-desc").textContent = `✅ Post-Quantum challenge signed!`;
+      if (window.opener && sdkCtx.reqId) {
+        window.opener.postMessage({
+          source: "aurachain-quantum-sdk",
+          reqId: sdkCtx.reqId,
+          result: { address: wallet.address, pubkey: wallet.pubHex, message: msg, signature: sigHex }
+        }, "*");
+      }
+      setTimeout(() => $("sdk-banner").classList.remove("show"), 2500);
+    }
+  } catch (e) {
+    $("sdk-desc").textContent = `❌ ${e.message || e}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 window.addEventListener("hashchange", checkIncomingGift);
 initWallet();
+initDeepLinksAndSdk();
 checkIncomingGift();
 refreshAll();
 setInterval(() => { if (!document.hidden) refreshAll(); }, 10000);

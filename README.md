@@ -1,4 +1,4 @@
-# AuraChain Quantum v1.3.0 (`aurachain-quantum-1`)
+# AuraChain Quantum v2.0.0 (`aurachain-quantum-1`)
 
 [![Live On-Chain Status](https://aurachain-quantum.vercel.app/badge.svg)](https://aurachain-quantum.vercel.app)
 [![Autonomous Pulse & CI](https://github.com/sanzaya-p/aurachain/actions/workflows/autonomous-pulse.yml/badge.svg)](https://github.com/sanzaya-p/aurachain/actions/workflows/autonomous-pulse.yml)
@@ -154,6 +154,10 @@ All endpoints return `application/json` with `Access-Control-Allow-Origin: *`:
 | `POST /tx` | Submit a Hybrid Post-Quantum signed transaction (`Tx` JSON) |
 | `POST /peers` | Announce a syncing P2P full node heartbeat |
 | `GET /pulse` | Idempotent autonomous VPoS slot + L2 Metropolis batch trigger |
+| `GET /@<handle>` | Public `@handle.aura` Post-Quantum profile, portfolio, certificates & 1-click AURA payment page |
+| `GET /cert/<sha3_or_id>` | Printable Post-Quantum File/Code Timestamp Certificate with client-side SHA3-256 re-verifier |
+| `GET /notary` & `GET /notary/<q>` | JSON Post-Quantum notarization registry & SHA3-256 Merkle inclusion proof API |
+| `GET /sdk.js` | 1-line Web SDK (`AuraChain.pay`, `AuraChain.signChallenge`, `AuraChain.verifyNotary`) |
 | `GET /badge.svg` | Live dynamic Shields-style SVG badge (`Block #<h> · <n> Wallets · Mine 55 AURA`) |
 | `GET /widget.js` | Self-contained 1-line embeddable status + referral miner widget |
 | `GET /feed.xml` | Real-time RSS 2.0 + Google WebSub (`PubSubHubbub`) syndication stream |

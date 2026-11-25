@@ -79,7 +79,11 @@ impl Head {
 // ------------------------------------------------------------------ store
 enum Store {
     GitHub { repo: String, branch: String, token: String },
-    Upstash { url: String, token: String },
+    Upstash {
+        url: String,
+        token: String,
+        archive_gh: Option<(String, String, String)>,
+    },
     Blob { token: String, public_base: String },
     File { dir: std::path::PathBuf },
 }
@@ -121,9 +125,11 @@ enum GhErr {
 impl Store {
     fn from_env() -> Result<Store, String> {
         let env = |a: &str, b: &str| std::env::var(a).or_else(|_| std::env::var(b)).ok();
-        if let Ok(tok) = std::env::var("AURA_GITHUB_TOKEN") {
-            let tok = tok.trim().trim_matches('"').to_string();
-            if !tok.is_empty() {
+        let gh_cfg = std::env::var("AURA_GITHUB_TOKEN")
+            .ok()
+            .map(|s| s.trim().trim_matches('"').to_string())
+            .filter(|s| !s.is_empty())
+            .map(|tok| {
                 let repo = std::env::var("AURA_GITHUB_REPO")
                     .ok()
                     .map(|s| s.trim().trim_matches('"').to_string())
@@ -134,15 +140,21 @@ impl Store {
                     .map(|s| s.trim().trim_matches('"').to_string())
                     .filter(|s| !s.is_empty())
                     .unwrap_or_else(|| "main".into());
-                return Ok(Store::GitHub { repo, branch, token: tok });
-            }
-        }
+                (repo, branch, tok)
+            });
         if let (Some(url), Some(token)) =
             (env("KV_REST_API_URL", "UPSTASH_REDIS_REST_URL"), env("KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_TOKEN"))
         {
             if !url.is_empty() && !token.is_empty() {
-                return Ok(Store::Upstash { url: url.trim_end_matches('/').into(), token });
+                return Ok(Store::Upstash {
+                    url: url.trim_end_matches('/').into(),
+                    token,
+                    archive_gh: gh_cfg,
+                });
             }
+        }
+        if let Some((repo, branch, tok)) = gh_cfg {
+            return Ok(Store::GitHub { repo, branch, token: tok });
         }
         if let Ok(tok) = std::env::var("BLOB_READ_WRITE_TOKEN") {
             let tok = tok.trim().trim_matches('"').to_string();
@@ -163,7 +175,8 @@ impl Store {
     fn backend_label(&self) -> &'static str {
         match self {
             Store::GitHub { .. } => "github-git-cas",
-            Store::Upstash { .. } => "upstash-redis",
+            Store::Upstash { archive_gh: Some(_), .. } => "hybrid-redis-git-cas",
+            Store::Upstash { archive_gh: None, .. } => "upstash-redis",
             Store::Blob { .. } => "vercel-blob-cas",
             Store::File { .. } => "local-file",
         }
@@ -240,7 +253,7 @@ impl Store {
     }
 
     fn redis(&self, args: Vec<String>) -> Result<Value, String> {
-        let Store::Upstash { url, token } = self else { unreachable!() };
+        let Store::Upstash { url, token, .. } = self else { unreachable!() };
         let r: Value = ureq::post(url)
             .set("Authorization", &format!("Bearer {token}"))
             .timeout(Duration::from_secs(8))
@@ -384,14 +397,39 @@ impl Store {
                     }
                 }
             }
-            Store::Upstash { .. } => {
+            Store::Upstash { archive_gh, .. } => {
                 let r = self.redis(vec!["MGET".into(), "auraq1:ver".into(), "auraq1:head".into()])?;
                 match (r[0].as_str(), r[1].as_str()) {
                     (Some(v), Some(h)) => Ok(Some((
                         v.parse().unwrap_or(1),
                         serde_json::from_str(h).map_err(|e| e.to_string())?,
                     ))),
-                    _ => Ok(None),
+                    _ => {
+                        if let Some((repo, branch, gh_tok)) = archive_gh {
+                            let gh = Store::GitHub {
+                                repo: repo.clone(),
+                                branch: branch.clone(),
+                                token: gh_tok.clone(),
+                            };
+                            if let Ok(Some((ver, head))) = gh.load_readonly() {
+                                let head_str = serde_json::to_string(&head).unwrap();
+                                let mut mset = vec![
+                                    "MSET".into(),
+                                    "auraq1:ver".into(),
+                                    ver.to_string(),
+                                    "auraq1:head".into(),
+                                    head_str,
+                                ];
+                                for b in &head.blocks {
+                                    mset.push(format!("auraq1:b:{}", b.header.height));
+                                    mset.push(serde_json::to_string(b).unwrap());
+                                }
+                                let _ = self.redis(mset);
+                                return Ok(Some((ver, head)));
+                            }
+                        }
+                        Ok(None)
+                    }
                 }
             }
             Store::Blob { .. } => {
@@ -546,7 +584,7 @@ impl Store {
                     Err(GhErr::Msg(m)) => Err(format!("github update ref: {m}")),
                 }
             }
-            Store::Upstash { .. } => {
+            Store::Upstash { archive_gh, .. } => {
                 let mut args: Vec<String> = vec![
                     "EVAL".into(),
                     CAS_SCRIPT.into(),
@@ -561,7 +599,20 @@ impl Store {
                     args.push(format!("auraq1:b:{}", b.header.height));
                     args.push(serde_json::to_string(b).unwrap());
                 }
-                Ok(self.redis(args)?.as_i64() == Some(1))
+                let ok = self.redis(args)?.as_i64() == Some(1);
+                if ok && new_ver % 25 == 0 {
+                    if let Some((repo, branch, gh_tok)) = archive_gh {
+                        let gh = Store::GitHub {
+                            repo: repo.clone(),
+                            branch: branch.clone(),
+                            token: gh_tok.clone(),
+                        };
+                        if let Ok(Some((gv, _))) = gh.load() {
+                            let _ = gh.cas(gv, new_ver, &head_to_save, blocks);
+                        }
+                    }
+                }
+                Ok(ok)
             }
             Store::Blob { .. } => {
                 let snaps = self.blob_list_snaps()?;
@@ -643,16 +694,32 @@ impl Store {
                 }
                 Ok(out)
             }
-            Store::Upstash { .. } => {
+            Store::Upstash { archive_gh, .. } => {
                 let mut args = vec!["MGET".to_string()];
                 args.extend((from..=to).map(|h| format!("auraq1:b:{h}")));
                 let r = self.redis(args)?;
-                Ok(r.as_array()
+                let mut out: Vec<Block> = r
+                    .as_array()
                     .cloned()
                     .unwrap_or_default()
                     .into_iter()
                     .filter_map(|v| v.as_str().and_then(|s| serde_json::from_str(s).ok()))
-                    .collect())
+                    .collect();
+                if out.len() < (to.saturating_sub(from) + 1) as usize {
+                    if let Some((repo, branch, gh_tok)) = archive_gh {
+                        let gh = Store::GitHub {
+                            repo: repo.clone(),
+                            branch: branch.clone(),
+                            token: gh_tok.clone(),
+                        };
+                        if let Ok(gh_blocks) = gh.get_blocks(from, to) {
+                            if gh_blocks.len() > out.len() {
+                                out = gh_blocks;
+                            }
+                        }
+                    }
+                }
+                Ok(out)
             }
             Store::Blob { public_base, .. } => {
                 let mut out = Vec::new();
@@ -847,6 +914,9 @@ fn info(head: &Head, key: &Option<Keypair>, store: &Store, now: u64) -> Value {
         "accounts": s.accounts.len(),
         "names_count": s.names.len(),
         "messages_count": s.next_post_id,
+        "notarizations_count": s.next_notary_id,
+        "community_attestations": s.validator_attestations.values().sum::<u64>(),
+        "checkpoint_cosigners": s.checkpoint_cosigners.get(&s.finalized_height).cloned().unwrap_or_default(),
         "referrals_count": s.referrals_count,
         "proposals_count": s.proposals.len(),
         "tokens_count": s.tokens.len(),
@@ -892,6 +962,7 @@ fn activity_json(head: &Head, key: &Option<Keypair>, now: u64) -> Value {
                 "balance_aura": chain::fmt_aura(acc.balance),
                 "stake_aura": chain::fmt_aura(acc.stake),
                 "total_aura": chain::fmt_aura(acc.balance + acc.stake),
+                "attestations": s.validator_attestations.get(addr).copied().unwrap_or(0),
                 "nonce": acc.nonce,
             })
         })
@@ -1014,10 +1085,35 @@ fn ecosystem_json(s: &State, height: u64) -> Value {
             })
         })
         .collect();
+    let notarizations: Vec<Value> = s
+        .notarizations
+        .iter()
+        .rev()
+        .take(50)
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "height": r.height,
+                "timestamp": r.timestamp,
+                "tx_id": r.tx_id,
+                "tx_index": r.tx_index,
+                "author": r.author,
+                "author_handle": s.address_names.get(&r.author),
+                "doc_hash": r.doc_hash,
+                "title": r.title,
+                "meta": r.meta,
+                "burned_aura": chain::fmt_aura(r.burned_aura),
+                "finalized": r.height <= s.finalized_height,
+                "cert_url": format!("{APP_URL}/cert/{}", r.doc_hash),
+            })
+        })
+        .collect();
     json!({
         "proposals": proposals,
         "tokens": tokens,
         "nfts": nfts,
+        "notarizations": notarizations,
+        "validator_attestations": s.validator_attestations,
         "l2_batches": s.l2_batches.iter().rev().take(25).collect::<Vec<_>>(),
         "slashes": s.slash_history,
     })
@@ -1196,6 +1292,392 @@ fn widget_js() -> String {
     )
 }
 
+fn sdk_js() -> String {
+    format!(
+        r#"(function(global){{
+  var BASE = '{APP_URL}';
+  function openPopup(url, reqId) {{
+    return new Promise(function(resolve, reject){{
+      var w = 520, h = 680;
+      var left = Math.max(0, (screen.width - w) / 2), top = Math.max(0, (screen.height - h) / 2);
+      var win = window.open(url, 'aurachain_pq_sdk', 'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top);
+      if (!win) return reject(new Error('Popup blocked by browser'));
+      var timer = setInterval(function(){{
+        if (win.closed) {{ clearInterval(timer); window.removeEventListener('message', onMsg); reject(new Error('Popup closed')); }}
+      }}, 600);
+      function onMsg(ev) {{
+        if (!ev.data || ev.data.source !== 'aurachain-quantum-sdk' || ev.data.reqId !== reqId) return;
+        clearInterval(timer);
+        window.removeEventListener('message', onMsg);
+        try {{ win.close(); }} catch(_){{}}
+        if (ev.data.error) reject(new Error(ev.data.error));
+        else resolve(ev.data.result);
+      }}
+      window.addEventListener('message', onMsg);
+    }});
+  }}
+  global.AuraChain = {{
+    endpoint: BASE,
+    pay: function(opts) {{
+      opts = opts || {{}};
+      var reqId = Math.random().toString(36).slice(2);
+      var q = '?sdk_mode=pay&req_id=' + encodeURIComponent(reqId)
+        + '&pay_to=' + encodeURIComponent(opts.to || '')
+        + '&pay_amount=' + encodeURIComponent(opts.amount || '5')
+        + '&pay_memo=' + encodeURIComponent(opts.memo || '');
+      return openPopup(BASE + '/' + q, reqId);
+    }},
+    signChallenge: function(opts) {{
+      opts = opts || {{}};
+      var reqId = Math.random().toString(36).slice(2);
+      var nonce = opts.nonce || Math.random().toString(36).slice(2);
+      var domain = opts.domain || location.host || 'external-app';
+      var q = '?sdk_mode=sign&req_id=' + encodeURIComponent(reqId)
+        + '&auth_domain=' + encodeURIComponent(domain)
+        + '&auth_nonce=' + encodeURIComponent(nonce);
+      return openPopup(BASE + '/' + q, reqId);
+    }},
+    verifyNotary: function(hashOrId) {{
+      return fetch(BASE + '/notary/' + encodeURIComponent(hashOrId)).then(function(r){{ return r.json(); }});
+    }},
+    resolve: function(handleOrAddr) {{
+      return fetch(BASE + '/account/' + encodeURIComponent(handleOrAddr)).then(function(r){{ return r.json(); }});
+    }}
+  }};
+}})(typeof window !== 'undefined' ? window : this);
+"#
+    )
+}
+
+fn find_notary<'a>(s: &'a State, q_raw: &str) -> Option<&'a chain::NotaryRecord> {
+    let q = q_raw.trim().to_ascii_lowercase();
+    s.notarizations.iter().rev().find(|r| {
+        r.doc_hash == q || r.tx_id.starts_with(&q) || q.parse::<u64>().map(|id| r.id == id).unwrap_or(false)
+    })
+}
+
+fn notary_proof_json(head: &Head, store: &Store, r: &chain::NotaryRecord) -> Option<Value> {
+    let blk = head
+        .blocks
+        .iter()
+        .find(|b| b.header.height == r.height)
+        .cloned()
+        .or_else(|| store.get_blocks(r.height, r.height).ok().and_then(|mut v| v.pop()))?;
+    let idx = if r.tx_index < blk.txs.len() && blk.txs[r.tx_index].id() == r.tx_id {
+        r.tx_index
+    } else {
+        blk.txs.iter().position(|t| t.id() == r.tx_id)?
+    };
+    let steps = chain::merkle_proof(&blk.txs, idx)?;
+    let verified = chain::verify_merkle_proof(&r.tx_id, &steps, &blk.header.tx_root);
+    Some(json!({
+        "block_hash": blk.header.hash_hex(),
+        "tx_root": blk.header.tx_root,
+        "state_root": blk.header.state_root,
+        "tx_index": idx,
+        "steps_count": steps.len(),
+        "steps": steps,
+        "verified": verified,
+    }))
+}
+
+fn cert_html(head: &Head, store: &Store, q_raw: &str) -> (u16, String) {
+    let s = &head.state;
+    let Some(r) = find_notary(s, q_raw) else {
+        let q_esc = xml_escape(q_raw);
+        let not_found = format!(
+            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Certificate Not Found — AuraChain Quantum Notary</title>
+<style>body{{margin:0;font:15px/1.6 system-ui,sans-serif;background:#070a12;color:#e5ecff;display:grid;place-items:center;min-height:100vh;padding:24px}}
+.box{{max-width:640px;background:#11182b;border:1px solid #22304f;border-radius:16px;padding:28px;text-align:center}}
+a.btn{{display:inline-block;margin-top:16px;padding:11px 20px;border-radius:10px;background:linear-gradient(135deg,#8b5cf6,#0891b2);color:#fff;font-weight:700;text-decoration:none}}
+code{{color:#67e8f9;word-break:break-all}}</style></head>
+<body><div class="box"><h2>No On-Chain Certificate Found Yet</h2>
+<p>No Post-Quantum notarization matched <code>{q_esc}</code> on <b>aurachain-quantum-1</b>.</p>
+<a class="btn" href="/?tab=notary">Stamp This SHA3-256 Digest On-Chain →</a></div></body></html>"#
+        );
+        return (404, not_found);
+    };
+    let author_label = s
+        .address_names
+        .get(&r.author)
+        .map(|h| format!("@{h}.aura"))
+        .unwrap_or_else(|| r.author.clone());
+    let fin = r.height <= s.finalized_height;
+    let fin_badge = if fin {
+        format!("Casper 2/3 BFT Finalized (Checkpoint #{})", s.finalized_height)
+    } else {
+        format!("Included in Block #{} (Awaiting next BFT checkpoint)", r.height)
+    };
+    let ts_str = if r.timestamp > 0 { iso8601_utc(r.timestamp) } else { format!("Block #{}", r.height) };
+    let proof_opt = notary_proof_json(head, store, r);
+    let tx_root = proof_opt
+        .as_ref()
+        .and_then(|p| p["tx_root"].as_str())
+        .unwrap_or("verified-in-consensus")
+        .to_string();
+    let title_esc = xml_escape(&r.title);
+    let meta_esc = if r.meta.is_empty() { "None".to_string() } else { xml_escape(&r.meta) };
+    let author_esc = xml_escape(&author_label);
+    let cert_url = format!("{APP_URL}/cert/{}", r.doc_hash);
+    let share_x = format!(
+        "https://twitter.com/intent/tweet?text={}&url={}",
+        format!("Notarized%20%22{}%22%20on%20AuraChain%20Quantum%20with%20NIST%20FIPS%20204%20ML-DSA-44%20%2B%20SHA3-256!", r.title.replace(' ', "%20")),
+        cert_url.replace(':', "%3A").replace('/', "%2F")
+    );
+    let html = format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Post-Quantum Certificate #{id}: {title_esc} — AuraChain Quantum</title>
+<meta name="description" content="Cryptographically notarized on AuraChain Quantum Block #{h} with Hybrid NIST FIPS 204 ML-DSA-44 + Ed25519 signature and SHA3-256 digest {hash}.">
+<meta property="og:title" content="Post-Quantum Certificate #{id}: {title_esc}">
+<meta property="og:description" content="SHA3-256: {hash} · Signed by {author_esc} in Block #{h} ({fin_badge})">
+<meta property="og:image" content="{APP_URL}/og.svg">
+<style>
+  :root {{ --bg:#070a12; --panel:#10182b; --line:#243456; --txt:#e5ecff; --mute:#8fa1c2; --cyan:#22d3ee; --pos:#10b981; --aura:#8b5cf6; }}
+  * {{ box-sizing:border-box; }}
+  body {{ margin:0; font:15px/1.6 Inter,system-ui,-apple-system,Segoe UI,sans-serif; background:radial-gradient(900px 420px at 50% -10%,#8b5cf628,transparent),var(--bg); color:var(--txt); padding:28px 18px 64px; }}
+  .wrap {{ max-width:860px; margin:0 auto; }}
+  .cert {{ background:linear-gradient(180deg,#111a30,#0c1324); border:2px solid #10b98188; border-radius:20px; padding:32px; box-shadow:0 18px 50px rgba(0,0,0,.45),0 0 40px #10b9811a; }}
+  .top {{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:18px; margin-bottom:20px; }}
+  .seal {{ display:inline-flex; align-items:center; gap:8px; padding:6px 14px; border-radius:999px; background:#10b98122; color:#6ee7b7; border:1px solid #10b98166; font-size:12.5px; font-weight:700; }}
+  h1 {{ font-size:26px; margin:0 0 6px; color:#fff; }}
+  .kv {{ display:grid; grid-template-columns:170px 1fr; gap:10px 16px; font-size:13.8px; margin:18px 0; }}
+  @media (max-width:640px) {{ .kv {{ grid-template-columns:1fr; gap:4px; }} }}
+  .k {{ color:var(--mute); font-weight:600; text-transform:uppercase; font-size:11.5px; letter-spacing:.5px; }}
+  .v {{ font-family:ui-monospace,Consolas,monospace; word-break:break-all; color:#f1f5ff; }}
+  .drop {{ margin-top:22px; padding:18px; border:1.5px dashed #22d3ee88; border-radius:14px; background:#091020; text-align:center; cursor:pointer; }}
+  .btn {{ display:inline-flex; align-items:center; gap:7px; padding:9px 15px; border-radius:9px; font-weight:700; font-size:13px; color:#fff; background:linear-gradient(135deg,var(--aura),#0891b2); text-decoration:none; border:none; cursor:pointer; }}
+  .btn.ghost {{ background:#17223b; border:1px solid var(--line); }}
+  .row {{ display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; }}
+  @media print {{ body {{ background:#fff; color:#000; padding:0; }} .cert {{ box-shadow:none; border:2px solid #000; background:#fff; color:#000; }} .v, h1 {{ color:#000; }} .no-print {{ display:none !important; }} }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="cert">
+    <div class="top">
+      <div>
+        <div style="font-size:12px;color:var(--cyan);font-weight:700;letter-spacing:.8px">AURACHAIN QUANTUM L1 · CRYPTOGRAPHIC NOTARY</div>
+        <h1>{title_esc}</h1>
+        <div style="color:var(--mute);font-size:13px">Certificate #{id} · Sealed {ts_str}</div>
+      </div>
+      <span class="seal">🛡️ NIST FIPS 204 ML-DSA-44 Verified</span>
+    </div>
+
+    <div class="kv">
+      <div class="k">SHA3-256 Document Digest</div><div class="v" id="expected-hash" style="color:#67e8f9;font-weight:700">{hash}</div>
+      <div class="k">Notarized By</div><div class="v"><a href="/@{handle_raw}" style="color:#a78bfa;text-decoration:none">{author_esc}</a> ({author_addr})</div>
+      <div class="k">L1 Block &amp; Finality</div><div class="v">Block #{h} · {fin_badge}</div>
+      <div class="k">Transaction ID</div><div class="v">{tx_id}</div>
+      <div class="k">Block SHA3 Merkle Root</div><div class="v">{tx_root}</div>
+      <div class="k">Metadata / MIME Note</div><div class="v">{meta_esc}</div>
+      <div class="k">Deflationary Burn</div><div class="v">{burned} AURA permanently burned</div>
+      <div class="k">Signature Standard</div><div class="v">Conjunctive Ed25519 + NIST FIPS 204 ML-DSA-44 + SHA3-256</div>
+    </div>
+
+    <div class="drop no-print" id="drop-zone">
+      <div style="font-weight:700;color:var(--cyan)">🔍 Zero-Upload Client-Side File Re-Verifier</div>
+      <div style="font-size:13px;color:var(--mute);margin-top:4px">Click or drop the original file here to compute its SHA3-256 locally in your browser (0 bytes uploaded) and verify it matches this certificate.</div>
+      <input type="file" id="verify-file" style="display:none">
+      <div id="verify-status" style="margin-top:10px;font-weight:700"></div>
+    </div>
+
+    <div class="row no-print">
+      <button type="button" class="btn" id="btn-copy">📋 Copy Certificate URL</button>
+      <a class="btn ghost" href="{share_x}" target="_blank" rel="noopener">Post Certificate on X</a>
+      <button type="button" class="btn ghost" id="btn-print">🖨️ Print / Save PDF</button>
+      <a class="btn ghost" href="/notary/{hash}" target="_blank" rel="noopener">JSON + Merkle Proof</a>
+      <a class="btn ghost" href="/">⚡ Stamp Your Own File Free</a>
+    </div>
+  </div>
+</div>
+<script type="module">
+import {{ sha3_256 }} from "https://esm.sh/@noble/hashes@1.8.0/sha3";
+const expected = document.getElementById("expected-hash").textContent.trim();
+const dz = document.getElementById("drop-zone");
+const fi = document.getElementById("verify-file");
+const st = document.getElementById("verify-status");
+const toHex = b => Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+async function checkFile(f) {{
+  if (!f) return;
+  st.style.color = "#67e8f9";
+  st.textContent = "Computing SHA3-256 locally…";
+  const buf = new Uint8Array(await f.arrayBuffer());
+  const got = toHex(sha3_256(buf));
+  if (got === expected) {{
+    st.style.color = "#34d399";
+    st.textContent = "✅ EXACT CRYPTOGRAPHIC MATCH! File SHA3-256 matches Block #{h} certificate.";
+  }} else {{
+    st.style.color = "#fb7185";
+    st.textContent = "❌ MISMATCH — File SHA3-256 is " + got.slice(0, 24) + "… (file was modified).";
+  }}
+}}
+dz.addEventListener("click", () => fi.click());
+dz.addEventListener("dragover", e => {{ e.preventDefault(); dz.style.borderColor = "#10b981"; }});
+dz.addEventListener("drop", e => {{ e.preventDefault(); checkFile(e.dataTransfer.files[0]); }});
+fi.addEventListener("change", () => checkFile(fi.files[0]));
+document.getElementById("btn-copy").addEventListener("click", () => {{
+  navigator.clipboard.writeText(location.href);
+  document.getElementById("btn-copy").textContent = "✅ Copied!";
+}});
+document.getElementById("btn-print").addEventListener("click", () => window.print());
+</script>
+</body>
+</html>"##,
+        id = r.id,
+        h = r.height,
+        hash = r.doc_hash,
+        author_addr = r.author,
+        handle_raw = s.address_names.get(&r.author).cloned().unwrap_or_else(|| r.author.clone()),
+        tx_id = r.tx_id,
+        burned = chain::fmt_aura(r.burned_aura),
+    );
+    (200, html)
+}
+
+fn profile_html(head: &Head, raw_id: &str) -> (u16, String) {
+    let s = &head.state;
+    let cleaned = raw_id.trim().trim_start_matches('@').trim_end_matches(".aura");
+    let resolved_opt = if crypto::is_valid_address(cleaned) {
+        Some(cleaned.to_string())
+    } else {
+        chain::normalize_handle(cleaned).ok().and_then(|h| s.names.get(&h).cloned())
+    };
+    let Some(addr) = resolved_opt else {
+        let h_esc = xml_escape(cleaned);
+        let unclaimed = format!(
+            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>@{h_esc}.aura is Available! — AuraChain Quantum</title>
+<style>body{{margin:0;font:15px/1.6 system-ui,sans-serif;background:#070a12;color:#e5ecff;display:grid;place-items:center;min-height:100vh;padding:24px}}
+.box{{max-width:580px;background:#11182b;border:1px solid #22d3ee66;border-radius:18px;padding:30px;text-align:center}}
+a.btn{{display:inline-block;margin-top:16px;padding:12px 22px;border-radius:10px;background:linear-gradient(135deg,#059669,#0891b2);color:#fff;font-weight:700;text-decoration:none}}</style></head>
+<body><div class="box"><h2>✨ @{h_esc}.aura is Unclaimed!</h2>
+<p>Nobody owns <b>@{h_esc}.aura</b> yet on AuraChain Quantum. Mine 50 AURA free in your browser in ~2 seconds and claim this scarce Post-Quantum identity forever!</p>
+<a class="btn" href="/?claim={h_esc}">Claim @{h_esc}.aura Free Now →</a></div></body></html>"#
+        );
+        return (404, unclaimed);
+    };
+    let acc = s.account(&addr);
+    let handle = s.address_names.get(&addr).cloned();
+    let display = handle
+        .as_ref()
+        .map(|h| format!("@{h}.aura"))
+        .unwrap_or_else(|| format!("{}…", &addr[..16]));
+    let pay_target = handle.as_ref().map(|h| format!("@{h}.aura")).unwrap_or_else(|| addr.clone());
+    let attests = s.validator_attestations.get(&addr).copied().unwrap_or(0);
+    let mut posts_html = String::new();
+    for m in s.messages.iter().rev().filter(|m| m.author == addr).take(10) {
+        posts_html.push_str(&format!(
+            r#"<div class="item"><div class="mute">Block #{}</div><div>{}</div></div>"#,
+            m.height,
+            xml_escape(&m.message)
+        ));
+    }
+    if posts_html.is_empty() {
+        posts_html = r#"<div class="mute">No Town Square posts yet.</div>"#.into();
+    }
+    let mut certs_html = String::new();
+    for c in s.notarizations.iter().rev().filter(|c| c.author == addr).take(10) {
+        certs_html.push_str(&format!(
+            r#"<div class="item"><a href="/cert/{}" style="color:#22d3ee;font-weight:700;text-decoration:none">📜 {}</a><div class="mute">Cert #{} · Block #{} · SHA3 {}…</div></div>"#,
+            c.doc_hash,
+            xml_escape(&c.title),
+            c.id,
+            c.height,
+            &c.doc_hash[..16]
+        ));
+    }
+    if certs_html.is_empty() {
+        certs_html = r#"<div class="mute">No Post-Quantum certificates stamped yet.</div>"#.into();
+    }
+    let disp_esc = xml_escape(&display);
+    let pay_esc = xml_escape(&pay_target);
+    let html = format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{disp_esc} — Post-Quantum Identity &amp; Checkout on AuraChain</title>
+<meta name="description" content="Verified Post-Quantum profile for {disp_esc} ({addr}) on AuraChain Quantum: {bal} AURA liquid, {stk} AURA staked. Send AURA or verify ML-DSA-44 certificates.">
+<meta property="og:title" content="{disp_esc} on AuraChain Quantum">
+<meta property="og:description" content="Post-Quantum Identity ({addr}) · {bal} AURA · {stk} Staked · Pay or Tip in 1 Click">
+<meta property="og:image" content="{APP_URL}/og.svg">
+<style>
+  :root {{ --bg:#070a12; --panel:#11182b; --line:#22304f; --txt:#e5ecff; --mute:#8b9bb8; --cyan:#22d3ee; --pos:#10b981; --aura:#8b5cf6; }}
+  * {{ box-sizing:border-box; }}
+  body {{ margin:0; font:15px/1.6 Inter,system-ui,sans-serif; background:radial-gradient(900px 400px at 20% -5%,#8b5cf628,transparent),var(--bg); color:var(--txt); padding:32px 18px 64px; }}
+  .wrap {{ max-width:900px; margin:0 auto; }}
+  .hero {{ background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:26px; display:flex; justify-content:space-between; gap:18px; flex-wrap:wrap; align-items:center; }}
+  .avatar {{ width:60px; height:60px; border-radius:16px; background:conic-gradient(from 120deg,var(--aura),var(--cyan),var(--pos),var(--aura)); display:grid; place-items:center; font-weight:900; font-size:22px; color:#fff; }}
+  .cards {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:18px 0; }}
+  .card {{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:15px; }}
+  .card .k {{ font-size:11px; color:var(--mute); text-transform:uppercase; }}
+  .card .v {{ font-size:21px; font-weight:800; margin-top:4px; }}
+  .grid2 {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }}
+  @media (max-width:760px) {{ .grid2 {{ grid-template-columns:1fr; }} }}
+  section {{ background:var(--panel); border:1px solid var(--line); border-radius:15px; padding:18px; }}
+  .item {{ padding:10px 0; border-bottom:1px solid #1b2742; }}
+  .mute {{ color:var(--mute); font-size:12.5px; }}
+  .btn {{ display:inline-flex; align-items:center; gap:6px; padding:9px 15px; border-radius:9px; font-weight:700; font-size:13px; color:#fff; background:linear-gradient(135deg,var(--aura),#0891b2); text-decoration:none; }}
+  .btn.green {{ background:linear-gradient(135deg,#059669,#0d9488); }}
+  .btn.ghost {{ background:#17223b; border:1px solid var(--line); }}
+  code {{ font-family:ui-monospace,Consolas,monospace; color:#67e8f9; font-size:12.5px; word-break:break-all; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div class="avatar">AQ</div>
+      <div>
+        <h1 style="margin:0;font-size:26px">{disp_esc}</h1>
+        <code>{addr}</code>
+        <div class="mute">NIST FIPS 204 ML-DSA-44 + Ed25519 Quantum-Shielded Account</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn green" href="/?pay_to={pay_esc}&amp;pay_amount=5&amp;pay_memo=Tip">💸 Tip 5 AURA</a>
+      <a class="btn" href="/?pay_to={pay_esc}&amp;pay_amount=25&amp;pay_memo=Payment">⚡ Pay 25 AURA</a>
+      <a class="btn ghost" href="/?ref={addr}">⛏️ Mine +55 AURA w/ Invite</a>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="k">Liquid Balance</div><div class="v" style="color:var(--cyan)">{bal} AURA</div></div>
+    <div class="card"><div class="k">Active VPoS Stake</div><div class="v" style="color:var(--pos)">{stk} AURA</div></div>
+    <div class="card"><div class="k">BFT Co-Signatures</div><div class="v">{attests}</div></div>
+    <div class="card"><div class="k">Transactions Sent</div><div class="v">{nonce}</div></div>
+  </div>
+
+  <div class="grid2">
+    <section>
+      <h3 style="margin-top:0">📜 Stamped Post-Quantum Certificates</h3>
+      {certs_html}
+    </section>
+    <section>
+      <h3 style="margin-top:0">💬 On-Chain Town Square Posts</h3>
+      {posts_html}
+    </section>
+  </div>
+
+  <div style="text-align:center;margin-top:24px" class="mute">
+    Powered by <a href="/" style="color:var(--cyan)">AuraChain Quantum v2.0</a> · Claim your own <b>@name.aura</b> profile free in 60 seconds!
+  </div>
+</div>
+</body>
+</html>"##,
+        bal = chain::fmt_aura(acc.balance),
+        stk = chain::fmt_aura(acc.stake),
+        nonce = acc.nonce,
+    );
+    (200, html)
+}
+
 fn human_wallet_count(s: &State, key: &Option<Keypair>) -> usize {
     let genesis_val = key
         .as_ref()
@@ -1341,7 +1823,7 @@ fn feed_xml(head: &Head, key: &Option<Keypair>, now: u64) -> String {
         .filter(|e| {
             matches!(
                 e.kind.as_str(),
-                "powclaim" | "claimname" | "createtoken" | "mintnft" | "propose" | "swap" | "buynft"
+                "powclaim" | "claimname" | "notarize" | "attest" | "createtoken" | "mintnft" | "propose" | "swap" | "buynft"
             )
         })
         .take(15)
@@ -1496,6 +1978,9 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
     }
     if method == "GET" && path == "/widget.js" {
         return (200, widget_js(), "application/javascript; charset=utf-8");
+    }
+    if method == "GET" && path == "/sdk.js" {
+        return (200, sdk_js(), "application/javascript; charset=utf-8");
     }
     if method == "GET" && (path == "/favicon.ico" || path == "/favicon.png") {
         return (204, String::new(), "image/x-icon");
@@ -1683,8 +2168,13 @@ fn handle_sync(method: String, path: String, query: String, body: Vec<u8>) -> (u
 
     // Batch cloud Git-CAS commits to at most 1 commit per 15s (unless >=12 txs queued),
     // keeping worst-case 24/7 mining well below 15% of GitHub's free 5,000 req/hr quota!
+    let min_commit_gap = if matches!(store, Store::Upstash { .. }) {
+        chain::SLOT_SECS
+    } else {
+        MIN_CLOUD_COMMIT_SECS
+    };
     let slot_ready = is_pulse
-        || now >= head.tip().header.timestamp + MIN_CLOUD_COMMIT_SECS
+        || now >= head.tip().header.timestamp + min_commit_gap
         || head.mempool.len() >= 12;
 
     if slot_ready && auth_ready {
@@ -1750,6 +2240,14 @@ fn finish_response(
     now: u64,
 ) -> (u16, String, &'static str) {
     if method == "GET" {
+        if let Some(q_cert) = path.strip_prefix("/cert/") {
+            let (code, html) = cert_html(&head, store, &percent_decode(q_cert));
+            return (code, html, "text/html; charset=utf-8");
+        }
+        if let Some(h_raw) = path.strip_prefix("/@").or_else(|| path.strip_prefix("/u/")) {
+            let (code, html) = profile_html(&head, &percent_decode(h_raw));
+            return (code, html, "text/html; charset=utf-8");
+        }
         match path {
             "/og.svg" => return (200, og_svg(&head, key), "image/svg+xml; charset=utf-8"),
             "/badge.svg" => return (200, badge_svg(&head, key), "image/svg+xml; charset=utf-8"),
@@ -1808,9 +2306,67 @@ fn finish_response(
                 .collect();
             (200, json!(v))
         }
-        ("GET", p) if p.starts_with("/account/") => {
-            let a = &p[9..];
+        ("GET", "/notary") => {
             let s = &head.state;
+            let list: Vec<Value> = s
+                .notarizations
+                .iter()
+                .rev()
+                .take(50)
+                .map(|r| {
+                    json!({
+                        "id": r.id,
+                        "height": r.height,
+                        "timestamp": r.timestamp,
+                        "tx_id": r.tx_id,
+                        "author": r.author,
+                        "author_handle": s.address_names.get(&r.author),
+                        "doc_hash": r.doc_hash,
+                        "title": r.title,
+                        "meta": r.meta,
+                        "burned_aura": chain::fmt_aura(r.burned_aura),
+                        "finalized": r.height <= s.finalized_height,
+                        "cert_url": format!("{APP_URL}/cert/{}", r.doc_hash),
+                    })
+                })
+                .collect();
+            (200, json!({ "count": s.next_notary_id, "notarizations": list }))
+        }
+        ("GET", p) if p.starts_with("/notary/") => {
+            let q_str = percent_decode(&p[8..]);
+            let s = &head.state;
+            match find_notary(s, &q_str) {
+                Some(r) => {
+                    let proof = notary_proof_json(&head, store, r);
+                    (
+                        200,
+                        json!({
+                            "verified_on_chain": true,
+                            "id": r.id,
+                            "height": r.height,
+                            "timestamp": r.timestamp,
+                            "tx_id": r.tx_id,
+                            "tx_index": r.tx_index,
+                            "author": r.author,
+                            "author_handle": s.address_names.get(&r.author),
+                            "doc_hash": r.doc_hash,
+                            "title": r.title,
+                            "meta": r.meta,
+                            "burned_aura": chain::fmt_aura(r.burned_aura),
+                            "finalized": r.height <= s.finalized_height,
+                            "cert_url": format!("{APP_URL}/cert/{}", r.doc_hash),
+                            "merkle_proof": proof,
+                        }),
+                    )
+                }
+                None => (404, json!({ "verified_on_chain": false, "query": q_str, "error": "notarization not found" })),
+            }
+        }
+        ("GET", p) if p.starts_with("/account/") => {
+            let raw_a = percent_decode(&p[9..]);
+            let s = &head.state;
+            let resolved_a = s.resolve_address(&raw_a).unwrap_or(raw_a);
+            let a = resolved_a.as_str();
             let acc = s.account(a);
             let pend = head
                 .mempool
@@ -1967,6 +2523,7 @@ async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
         "/og.svg"
             | "/badge.svg"
             | "/widget.js"
+            | "/sdk.js"
             | "/a8f4c2e91b7d40639e5a12c8f04b73d1.txt"
             | "/feed.xml"
             | "/rss.xml"
